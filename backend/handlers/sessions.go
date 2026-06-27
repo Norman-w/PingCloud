@@ -1,0 +1,470 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"pingpong/db"
+	"pingpong/rating"
+)
+
+// ---- Request types ----
+
+type CreateSessionRequest struct {
+	Name      string `json:"name"`
+	PlayerIDs []int  `json:"player_ids"`
+}
+
+type ScoreMatchRequest struct {
+	ScoreA int `json:"score_a"`
+	ScoreB int `json:"score_b"`
+}
+
+// ---- Response types ----
+
+type SessionInfo struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+}
+
+type SessionPlayer struct {
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	CurrentRating  int    `json:"current_rating"`
+	Wins           int    `json:"wins"`
+	Losses         int    `json:"losses"`
+	RatingChange   int    `json:"rating_change"`
+}
+
+type SessionMatch struct {
+	ID             int    `json:"id"`
+	Round          int    `json:"round"`
+	PlayerAID      int    `json:"player_a_id"`
+	PlayerBID      int    `json:"player_b_id"`
+	PlayerAName    string `json:"player_a_name"`
+	PlayerBName    string `json:"player_b_name"`
+	ScoreA         int    `json:"score_a"`
+	ScoreB         int    `json:"score_b"`
+	RatingChangeA  int    `json:"rating_change_a"`
+	RatingChangeB  int    `json:"rating_change_b"`
+	WinnerID       int    `json:"winner_id"`
+	Played         bool   `json:"played"` // whether score has been recorded
+}
+
+type SessionDetail struct {
+	SessionInfo
+	Players []SessionPlayer `json:"players"`
+	Matches []SessionMatch  `json:"matches"`
+}
+
+// ---- Handlers ----
+
+func CreateSession(w http.ResponseWriter, r *http.Request) {
+	var req CreateSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if len(req.PlayerIDs) < 2 {
+		http.Error(w, "至少需要2名球员", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "乒乒活动"
+	}
+
+	// Dedup player IDs
+	seen := map[int]bool{}
+	unique := []int{}
+	for _, pid := range req.PlayerIDs {
+		if !seen[pid] {
+			seen[pid] = true
+			unique = append(unique, pid)
+		}
+	}
+
+	// Start transaction
+	tx, err := db.DB.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Create session
+	var sessionID int
+	err = tx.QueryRow(
+		"INSERT INTO sessions (name) VALUES ($1) RETURNING id",
+		name,
+	).Scan(&sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Add session players
+	for _, pid := range unique {
+		_, err = tx.Exec(
+			"INSERT INTO session_players (session_id, player_id) VALUES ($1, $2)",
+			sessionID, pid,
+		)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Generate round-robin matches
+	err = generateRoundRobin(tx, sessionID, unique)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, map[string]int{"id": sessionID})
+}
+
+func GetSessions(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.DB.Query(`
+		SELECT s.id, s.name, s.status, s.created_at,
+			COUNT(DISTINCT sp.player_id) AS player_count,
+			COUNT(DISTINCT m.id) AS match_count,
+			COUNT(DISTINCT CASE WHEN m.score_a IS NULL THEN m.id END) AS unplayed_count
+		FROM sessions s
+		LEFT JOIN session_players sp ON sp.session_id = s.id
+		LEFT JOIN matches m ON m.session_id = s.id
+		GROUP BY s.id
+		ORDER BY s.created_at DESC LIMIT 20
+	`)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type sessionRow struct {
+		SessionInfo
+		PlayerCount   int `json:"player_count"`
+		MatchCount    int `json:"match_count"`
+		UnplayedCount int `json:"unplayed_count"`
+	}
+
+	sessions := make([]sessionRow, 0)
+	for rows.Next() {
+		var s sessionRow
+		var createdAt interface{}
+		if err := rows.Scan(&s.ID, &s.Name, &s.Status, &createdAt,
+			&s.PlayerCount, &s.MatchCount, &s.UnplayedCount); err != nil {
+			continue
+		}
+		if t, ok := createdAt.(interface{ String() string }); ok {
+			s.CreatedAt = t.String()
+		}
+		sessions = append(sessions, s)
+	}
+	writeJSON(w, sessions)
+}
+
+func GetSession(w http.ResponseWriter, r *http.Request) {
+	// Extract session ID from URL: /api/sessions/{id}
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	// Handle sub-paths like /api/sessions/1/matches/2
+	parts := strings.Split(path, "/")
+	sessionID, err := strconv.Atoi(parts[0])
+	if err != nil {
+		http.Error(w, "invalid session id", http.StatusBadRequest)
+		return
+	}
+
+	// Get session info
+	var detail SessionDetail
+	var createdAt interface{}
+	err = db.DB.QueryRow(
+		"SELECT id, name, status, created_at FROM sessions WHERE id = $1",
+		sessionID,
+	).Scan(&detail.ID, &detail.Name, &detail.Status, &createdAt)
+	if err != nil {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+	if t, ok := createdAt.(interface{ String() string }); ok {
+		detail.CreatedAt = t.String()
+	}
+
+	// Get session players with stats
+	rows, err := db.DB.Query(`
+		SELECT p.id, p.name, p.current_rating,
+			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS wins,
+			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS losses
+		FROM session_players sp
+		JOIN players p ON p.id = sp.player_id
+		LEFT JOIN matches m ON (m.player_a_id = p.id OR m.player_b_id = p.id) AND m.session_id = $1
+		WHERE sp.session_id = $1
+		GROUP BY p.id
+		ORDER BY wins DESC, p.current_rating DESC
+	`, sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	detail.Players = make([]SessionPlayer, 0)
+	for rows.Next() {
+		var sp SessionPlayer
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.CurrentRating, &sp.Wins, &sp.Losses); err != nil {
+			continue
+		}
+		detail.Players = append(detail.Players, sp)
+	}
+
+	// Get session matches
+	mRows, err := db.DB.Query(`
+		SELECT m.id, m.round, m.player_a_id, m.player_b_id,
+			COALESCE(m.score_a, -1), COALESCE(m.score_b, -1),
+			COALESCE(m.rating_change_a, 0), COALESCE(m.rating_change_b, 0),
+			COALESCE(m.winner_id, 0),
+			pa.name, pb.name
+		FROM matches m
+		JOIN players pa ON pa.id = m.player_a_id
+		JOIN players pb ON pb.id = m.player_b_id
+		WHERE m.session_id = $1
+		ORDER BY m.round, m.id
+	`, sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer mRows.Close()
+
+	detail.Matches = make([]SessionMatch, 0)
+	for mRows.Next() {
+		var sm SessionMatch
+		var scoreA, scoreB, winnerID int
+		if err := mRows.Scan(&sm.ID, &sm.Round, &sm.PlayerAID, &sm.PlayerBID,
+			&scoreA, &scoreB, &sm.RatingChangeA, &sm.RatingChangeB, &winnerID,
+			&sm.PlayerAName, &sm.PlayerBName); err != nil {
+			continue
+		}
+		if scoreA >= 0 {
+			sm.ScoreA = scoreA
+			sm.ScoreB = scoreB
+			sm.WinnerID = winnerID
+			sm.Played = true
+		}
+		detail.Matches = append(detail.Matches, sm)
+	}
+
+	writeJSON(w, detail)
+}
+
+func ScoreSessionMatch(w http.ResponseWriter, r *http.Request) {
+	// URL: /api/sessions/{sessionID}/matches/{matchID}
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 3 || parts[1] != "matches" {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	sessionID, _ := strconv.Atoi(parts[0])
+	matchID, _ := strconv.Atoi(parts[2])
+
+	var req ScoreMatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.ScoreA == req.ScoreB {
+		http.Error(w, "不能平局", http.StatusBadRequest)
+		return
+	}
+
+	// Verify match belongs to session
+	var playerAID, playerBID int
+	var oldChangeA, oldChangeB int
+	var existingScoreA sql.NullInt64
+	err := db.DB.QueryRow(
+		"SELECT player_a_id, player_b_id, rating_change_a, rating_change_b, score_a FROM matches WHERE id = $1 AND session_id = $2",
+		matchID, sessionID,
+	).Scan(&playerAID, &playerBID, &oldChangeA, &oldChangeB, &existingScoreA)
+	if err != nil {
+		http.Error(w, "match not found in this session", http.StatusNotFound)
+		return
+	}
+
+	// If correcting a previously recorded match, reverse old rating changes
+	if existingScoreA.Valid {
+		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldChangeA, playerAID)
+		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldChangeB, playerBID)
+	}
+
+	// Get current ratings
+	var ratingA, ratingB int
+	db.DB.QueryRow("SELECT current_rating FROM players WHERE id = $1", playerAID).Scan(&ratingA)
+	db.DB.QueryRow("SELECT current_rating FROM players WHERE id = $1", playerBID).Scan(&ratingB)
+
+	// Calculate rating changes
+	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(ratingA, ratingB, req.ScoreA, req.ScoreB)
+	winnerID := playerAID
+	if winnerIdx == 1 {
+		winnerID = playerBID
+	}
+
+	// Update match
+	_, err = db.DB.Exec(`
+		UPDATE matches SET score_a=$1, score_b=$2, rating_change_a=$3, rating_change_b=$4, winner_id=$5
+		WHERE id=$6 AND session_id=$7`,
+		req.ScoreA, req.ScoreB, changeA, changeB, winnerID, matchID, sessionID,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Update player ratings
+	db.DB.Exec("UPDATE players SET current_rating = current_rating + $1 WHERE id = $2", changeA, playerAID)
+	db.DB.Exec("UPDATE players SET current_rating = current_rating + $1 WHERE id = $2", changeB, playerBID)
+
+	writeJSON(w, map[string]interface{}{
+		"id":              matchID,
+		"rating_change_a": changeA,
+		"rating_change_b": changeB,
+		"winner_id":       winnerID,
+		"corrected":       existingScoreA.Valid,
+	})
+}
+
+func UpdateSession(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	sessionID, _ := strconv.Atoi(parts[0])
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.DB.Exec("UPDATE sessions SET name=$1 WHERE id=$2", strings.TrimSpace(req.Name), sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func AddPlayerToSession(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	sessionID, _ := strconv.Atoi(parts[0])
+
+	var req struct {
+		PlayerID int `json:"player_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Verify session is active
+	var status string
+	db.DB.QueryRow("SELECT status FROM sessions WHERE id=$1", sessionID).Scan(&status)
+	if status != "active" {
+		http.Error(w, "session is not active", http.StatusBadRequest)
+		return
+	}
+
+	// Check player not already in session
+	var exists bool
+	db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM session_players WHERE session_id=$1 AND player_id=$2)", sessionID, req.PlayerID).Scan(&exists)
+	if exists {
+		http.Error(w, "球员已在活动中", http.StatusConflict)
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Add player to session
+	_, err = tx.Exec("INSERT INTO session_players (session_id, player_id) VALUES ($1, $2)", sessionID, req.PlayerID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Delete unplayed matches
+	_, err = tx.Exec("DELETE FROM matches WHERE session_id=$1 AND score_a IS NULL", sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get all session players for re-scheduling
+	rows, err := tx.Query("SELECT player_id FROM session_players WHERE session_id=$1", sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var playerIDs []int
+	for rows.Next() {
+		var pid int
+		rows.Scan(&pid)
+		playerIDs = append(playerIDs, pid)
+	}
+
+	// Regenerate round-robin (only for unplayed matches, but we deleted them above)
+	// Get max round from existing matches to continue numbering
+	var maxRound int
+	tx.QueryRow("SELECT COALESCE(MAX(round), 0) FROM matches WHERE session_id=$1", sessionID).Scan(&maxRound)
+	// We'll just regenerate all unplayed with continued round numbers
+	err = regenerateUnplayed(tx, sessionID, playerIDs, maxRound)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func CompleteSession(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	sessionID, _ := strconv.Atoi(parts[0])
+
+	_, err := db.DB.Exec("UPDATE sessions SET status='completed' WHERE id=$1", sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "completed"})
+}
