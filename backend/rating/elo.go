@@ -34,11 +34,11 @@ func CalculateRatingChanges(ratingA, ratingB, scoreA, scoreB int) (int, int, int
 	expectedA := 1.0 / (1.0 + math.Pow(10, float64(ratingB-ratingA)/400.0))
 	expectedB := 1.0 - expectedA
 
-	// Dynamic K-factor based on rating difference
-	kFactor := kFactorDynamic(ratingA, ratingB, actualA > 0.5)
+	// Fixed K-factor: bigger gap = bigger upset reward naturally
+	const K = 32.0
 
-	changeA := int(math.Round(kFactor * (actualA - expectedA)))
-	changeB := int(math.Round(kFactor * (actualB - expectedB)))
+	changeA := int(math.Round(K * (actualA - expectedA)))
+	changeB := int(math.Round(K * (actualB - expectedB)))
 
 	// Inject winner bonus (prevent closed-system rating stagnation)
 	if winnerBonus > 0 {
@@ -50,24 +50,4 @@ func CalculateRatingChanges(ratingA, ratingB, scoreA, scoreB int) (int, int, int
 	}
 
 	return changeA, changeB, winnerID
-}
-
-func kFactorDynamic(ratingA, ratingB int, isUpset bool) float64 {
-	diff := math.Abs(float64(ratingA - ratingB))
-	baseK := 32.0
-
-	// Reduce K for large rating differences
-	if diff > 200 {
-		baseK = 24.0
-	}
-	if diff > 400 {
-		baseK = 16.0
-	}
-
-	// Boost K slightly for upsets (underdog wins)
-	if isUpset && diff > 100 {
-		baseK *= 1.2
-	}
-
-	return baseK
 }

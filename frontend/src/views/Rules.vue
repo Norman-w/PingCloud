@@ -28,14 +28,16 @@ const router = useRouter()
 
       <!-- K 因子 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">📐 K 因子（动态调整）</h3>
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <tr style="background: #f8f9fa;"><th style="padding: 10px; text-align: left;">分差范围</th><th style="padding: 10px;">K 值</th><th style="padding: 10px; text-align: left;">说明</th></tr>
-          <tr><td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">0 – 200</td><td style="padding: 10px; text-align: center; font-weight: 700; color: #1989fa;">32</td><td style="padding: 10px;">势均力敌，充分波动</td></tr>
-          <tr><td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">201 – 400</td><td style="padding: 10px; text-align: center; font-weight: 700; color: #1989fa;">24</td><td style="padding: 10px;">有差距，缩小波动</td></tr>
-          <tr><td style="padding: 10px; border-bottom: 1px solid #f0f0f0;">400+</td><td style="padding: 10px; text-align: center; font-weight: 700; color: #1989fa;">16</td><td style="padding: 10px;">差距悬殊，防刷分</td></tr>
-          <tr><td style="padding: 10px;">🎯 冷门</td><td style="padding: 10px; text-align: center; font-weight: 700; color: #ee0a24;">×1.2</td><td style="padding: 10px;">低分赢高分（差>100）加权</td></tr>
-        </table>
+        <h3 style="margin-bottom: 12px;">📐 K 因子（固定值）</h3>
+        <p style="font-size: 14px; color: #666; line-height: 1.8;">
+          使用固定 <b style="color: #1989fa;">K = 32</b>，不再因分差而降低。
+          差距越大，冷门奖励<b>自然越大</b>（Elo 公式自身特性），
+          不需要人工降 K 来限制。
+        </p>
+        <div style="background: #f0f6ff; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px;">
+          <b>为什么固定 K？</b> 动态 K（分差大→K 变小）会导致大冷门奖励反而少，
+          违反直觉。固定 K 让数学更纯粹：你赢了一个更强的对手，就该得更多分。
+        </div>
       </div>
 
       <!-- 预期胜率表 -->
@@ -53,22 +55,25 @@ const router = useRouter()
 
       <!-- 实战举例 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">⚔️ 实战举例</h3>
+        <h3 style="margin-bottom: 12px;">⚔️ 实战举例（K=32，胜者奖励 +1）</h3>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 600; margin-bottom: 4px;">同分段（1500 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">胜者 <b style="color: #07c160;">+16</b>，败者 <b style="color: #ee0a24;">−16</b>（五五开）</div>
+          <div style="font-size: 13px; color: #666;">胜者 <b style="color: #07c160;">+17</b>，败者 <b style="color: #ee0a24;">−16</b></div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 600; margin-bottom: 4px;">差 100 分（1600 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">1600 赢 → <b style="color: #07c160;">+12</b> / −12 <span style="color: #969799;">|</span> 1500 赢（冷门）→ <b style="color: #07c160;">+25</b> / −25</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+13</b> / −12 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+22</b> / −21</div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 600; margin-bottom: 4px;">差 300 分（1800 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">1800 赢 → <b style="color: #07c160;">+4</b> / −4 <span style="color: #969799;">|</span> 1500 赢 → <b style="color: #07c160;">+24</b> / −24</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+6</b> / −5 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+28</b> / −27</div>
         </div>
         <div>
           <div style="font-weight: 600; margin-bottom: 4px;">差 500 分（2000 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">2000 赢 → <b style="color: #07c160;">+1</b> / −1 <span style="color: #969799;">|</span> 1500 赢 → <b style="color: #07c160;">+18</b> / −18</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+3</b> / −2 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+31</b> / −30</div>
+        </div>
+        <div style="background: #fffbe6; padding: 12px; border-radius: 8px; margin-top: 16px; font-size: 13px; color: #ad8b00;">
+          💡 低分赢高分的奖励：差100→+22，差300→+28，差500→+31。差距越大，冷门奖励越大，符合直觉。
         </div>
       </div>
 
