@@ -5,7 +5,7 @@ import { IconTournament, IconPlus, IconList, IconUsers, IconClipboardCheck, Icon
 import ScoreDialog from '../components/ScoreDialog.vue'
 import AddPlayerDialog from '../components/AddPlayerDialog.vue'
 import { api, type Player } from '../api'
-import { unplayedCount, sessionChange, startRating, changeSign, selectedPlayers, type SessionMatch, type SessionPlayer, type SessionDetail } from '../session-utils'
+import { unplayedCount, sessionChange, sessionDisplayRating, changeSign, selectedPlayers, type SessionMatch, type SessionPlayer, type SessionDetail } from '../session-utils'
 
 const players = ref<Player[]>([])
 const loadingPlayers = ref(true)
@@ -239,7 +239,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
             <input type="checkbox" :checked="selectedIDs.has(p.id)" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #1989fa;" />
             <div style="flex: 1;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }}</div>
-              <div style="font-size: 13px; color: #969799;">{{ p.current_rating }} 分</div>
+              <div style="font-size: 13px; color: #969799;">{{ sessionDisplayRating(p, currentSession!.matches) }} 分</div>
             </div>
           </div>
           <div @click="showAdd = true" style="display: flex; align-items: center; justify-content: center; padding: 14px; color: #1989fa; font-weight: 500; cursor: pointer;">
@@ -288,7 +288,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
           <div style="font-weight: 600; margin-bottom: 12px; font-size: 16px;">{{ sessionName }}</div>
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">
             <span v-for="p in myPlayers()" :key="p.id" style="font-size: 14px; padding: 6px 12px; background: #e8f4ff; color: #1989fa; border-radius: 8px; font-weight: 500;">
-              {{ p.name }} ({{ p.current_rating }})
+              {{ p.name }} ({{ sessionDisplayRating(p, currentSession!.matches) }})
             </span>
           </div>
           <div style="margin-top: 12px; font-size: 13px; color: #969799;">将自动生成循环赛对阵表（每人互相打一场）</div>
@@ -339,7 +339,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ p.id }}</span></div>
               <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
             </div>
-            <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ p.current_rating }}</div>
+            <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession!.matches) }}</div>
           </div>
         </div>
 
@@ -415,9 +415,9 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
             </div>
             <div style="text-align: right;">
-              <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ p.current_rating }}</div>
+              <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession!.matches) }}</div>
               <div style="font-size: 11px;">
-                <span style="color: #969799;">{{ startRating(p, currentSession!.matches) }}</span>
+                <span style="color: #969799;">{{ p.starting_rating }}</span>
                 <span :style="{ color: sessionChange(currentSession!.matches, p.id) >= 0 ? '#07c160' : '#ee0a24', fontWeight: 600 }">
                   {{ changeSign(sessionChange(currentSession!.matches, p.id)) }}{{ sessionChange(currentSession!.matches, p.id) }}
                 </span>

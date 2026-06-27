@@ -35,10 +35,9 @@ type SessionInfo struct {
 type SessionPlayer struct {
 	ID             int    `json:"id"`
 	Name           string `json:"name"`
-	CurrentRating  int    `json:"current_rating"`
+	StartingRating int    `json:"starting_rating"`
 	Wins           int    `json:"wins"`
 	Losses         int    `json:"losses"`
-	RatingChange   int    `json:"rating_change"`
 }
 
 type SessionMatch struct {
@@ -108,11 +107,13 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add session players
+	// Add session players with frozen starting ratings
 	for _, pid := range unique {
+		var sr int
+		db.DB.QueryRow("SELECT current_rating FROM players WHERE id=$1", pid).Scan(&sr)
 		_, err = tx.Exec(
-			"INSERT INTO session_players (session_id, player_id) VALUES ($1, $2)",
-			sessionID, pid,
+			"INSERT INTO session_players (session_id, player_id, starting_rating) VALUES ($1, $2, $3)",
+			sessionID, pid, sr,
 		)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -203,17 +204,17 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 		detail.CreatedAt = t.String()
 	}
 
-	// Get session players with stats
+	// Get session players with stats + frozen starting rating
 	rows, err := db.DB.Query(`
-		SELECT p.id, p.name, p.current_rating,
+		SELECT p.id, p.name, sp.starting_rating,
 			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS wins,
 			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS losses
 		FROM session_players sp
 		JOIN players p ON p.id = sp.player_id
 		LEFT JOIN matches m ON (m.player_a_id = p.id OR m.player_b_id = p.id) AND m.session_id = $1
 		WHERE sp.session_id = $1
-		GROUP BY p.id
-		ORDER BY wins DESC, p.current_rating DESC
+		GROUP BY p.id, sp.starting_rating
+		ORDER BY wins DESC, sp.starting_rating DESC
 	`, sessionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -224,7 +225,7 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 	detail.Players = make([]SessionPlayer, 0)
 	for rows.Next() {
 		var sp SessionPlayer
-		if err := rows.Scan(&sp.ID, &sp.Name, &sp.CurrentRating, &sp.Wins, &sp.Losses); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.StartingRating, &sp.Wins, &sp.Losses); err != nil {
 			continue
 		}
 		detail.Players = append(detail.Players, sp)
@@ -305,25 +306,25 @@ func ScoreSessionMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If correcting a previously recorded match, reverse old rating changes
-	if existingScoreA.Valid {
-		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldChangeA, playerAID)
-		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldChangeB, playerBID)
-	}
+	// Get frozen starting ratings for this session
+	var srA, srB int
+	db.DB.QueryRow("SELECT starting_rating FROM session_players WHERE session_id=$1 AND player_id=$2", sessionID, playerAID).Scan(&srA)
+	db.DB.QueryRow("SELECT starting_rating FROM session_players WHERE session_id=$1 AND player_id=$2", sessionID, playerBID).Scan(&srB)
 
-	// Get current ratings
-	var ratingA, ratingB int
-	db.DB.QueryRow("SELECT current_rating FROM players WHERE id = $1", playerAID).Scan(&ratingA)
-	db.DB.QueryRow("SELECT current_rating FROM players WHERE id = $1", playerBID).Scan(&ratingB)
-
-	// Calculate rating changes
-	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(ratingA, ratingB, req.ScoreA, req.ScoreB)
+	// Calculate rating changes based on FROZEN session-start ratings (not live current_rating)
+	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(srA, srB, req.ScoreA, req.ScoreB)
 	winnerID := playerAID
 	if winnerIdx == 1 {
 		winnerID = playerBID
 	}
 
-	// Update match
+	// If correcting, reverse old changes from current_rating first
+	if existingScoreA.Valid {
+		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldChangeA, playerAID)
+		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldChangeB, playerBID)
+	}
+
+	// Update match record
 	_, err = db.DB.Exec(`
 		UPDATE matches SET score_a=$1, score_b=$2, rating_change_a=$3, rating_change_b=$4, winner_id=$5
 		WHERE id=$6 AND session_id=$7`,
@@ -334,9 +335,7 @@ func ScoreSessionMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update player ratings
-	db.DB.Exec("UPDATE players SET current_rating = current_rating + $1 WHERE id = $2", changeA, playerAID)
-	db.DB.Exec("UPDATE players SET current_rating = current_rating + $1 WHERE id = $2", changeB, playerBID)
+	// Do NOT update current_rating now — only at session complete
 
 	writeJSON(w, map[string]interface{}{
 		"id":              matchID,
@@ -461,7 +460,24 @@ func CompleteSession(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(path, "/")
 	sessionID, _ := strconv.Atoi(parts[0])
 
-	_, err := db.DB.Exec("UPDATE sessions SET status='completed' WHERE id=$1", sessionID)
+	// Apply all match rating changes to current_rating
+	_, err := db.DB.Exec(`
+		UPDATE players p SET current_rating = p.current_rating + (
+			SELECT COALESCE(SUM(
+				CASE WHEN m.player_a_id = p.id THEN m.rating_change_a
+				     WHEN m.player_b_id = p.id THEN m.rating_change_b
+				     ELSE 0 END), 0)
+			FROM matches m
+			WHERE m.session_id = $1 AND m.score_a IS NOT NULL
+			AND (m.player_a_id = p.id OR m.player_b_id = p.id)
+		) WHERE p.id IN (SELECT player_id FROM session_players WHERE session_id = $1)
+	`, sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.DB.Exec("UPDATE sessions SET status='completed' WHERE id=$1", sessionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

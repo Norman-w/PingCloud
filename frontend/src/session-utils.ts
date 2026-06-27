@@ -9,8 +9,8 @@ export interface SessionMatch {
 }
 
 export interface SessionPlayer {
-  id: number; name: string; current_rating: number
-  wins: number; losses: number; rating_change: number
+  id: number; name: string; starting_rating: number
+  wins: number; losses: number
 }
 
 export interface SessionDetail {
@@ -32,8 +32,8 @@ export function sessionChange(matches: SessionMatch[], pid: number): number {
   return total
 }
 
-export function startRating(p: SessionPlayer, matches: SessionMatch[]): number {
-  return p.current_rating - sessionChange(matches, p.id)
+export function sessionDisplayRating(p: SessionPlayer, matches: SessionMatch[]): number {
+  return p.starting_rating + sessionChange(matches, p.id)
 }
 
 export function changeSign(v: number): string { return v >= 0 ? '+' : '' }
