@@ -22,21 +22,21 @@ const router = useRouter()
         <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; font-size: 14px; line-height: 2;">
           <div><b>预期胜率</b> = 1 / ( 1 + 10<sup>(对手分 − 自己分) / 400</sup> )</div>
           <div><b>积分变化</b> = K × ( 实际结果 − 预期胜率 )</div>
-          <div style="color: #969799; margin-top: 4px;">实际结果：赢 = 1.0，输 = 0.0</div>
+          <div style="color: #969799; margin-top: 4px;">实际结果：赢 = 1.0，输 = 0.0 · 零和系统</div>
         </div>
       </div>
 
       <!-- K 因子 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">📐 K 因子（固定值）</h3>
-        <p style="font-size: 14px; color: #666; line-height: 1.8;">
-          使用固定 <b style="color: #1989fa;">K = 32</b>，不再因分差而降低。
-          差距越大，冷门奖励<b>自然越大</b>（Elo 公式自身特性），
-          不需要人工降 K 来限制。
-        </p>
+        <h3 style="margin-bottom: 12px;">📐 K 因子（按选手经验 · 对齐开球网）</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr style="background: #f8f9fa;"><th style="padding: 10px; text-align: left;">K 值</th><th style="padding: 10px; text-align: left;">适用条件</th><th style="padding: 10px; text-align: left;">设计原理</th></tr>
+          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">40</td><td style="padding: 10px;">新选手（比赛 &lt; 30 场）</td><td style="padding: 10px; font-size: 13px;">快速收敛到真实水平</td></tr>
+          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">20</td><td style="padding: 10px;">常规选手（比赛 ≥ 30 场）</td><td style="padding: 10px; font-size: 13px;">正常速度，平衡稳定</td></tr>
+          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">10</td><td style="padding: 10px;">高手（积分 ≥ 2400）</td><td style="padding: 10px; font-size: 13px;">长期稳定，防剧烈波动</td></tr>
+        </table>
         <div style="background: #f0f6ff; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px;">
-          <b>为什么固定 K？</b> 动态 K（分差大→K 变小）会导致大冷门奖励反而少，
-          违反直觉。固定 K 让数学更纯粹：你赢了一个更强的对手，就该得更多分。
+          💡 与开球网/USATT 完全一致。每人用<b>自己的 K</b>，非对称（如新人 K=40 vs 老手 K=20）。
         </div>
       </div>
 
@@ -55,25 +55,25 @@ const router = useRouter()
 
       <!-- 实战举例 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">⚔️ 实战举例（K=32，胜者奖励 +1）</h3>
+        <h3 style="margin-bottom: 12px;">⚔️ 实战举例（老手 K=20）</h3>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 600; margin-bottom: 4px;">同分段（1500 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">胜者 <b style="color: #07c160;">+17</b>，败者 <b style="color: #ee0a24;">−16</b></div>
+          <div style="font-size: 13px; color: #666;">胜者 <b style="color: #07c160;">+10</b>，败者 <b style="color: #ee0a24;">−10</b>（零和）</div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 600; margin-bottom: 4px;">差 100 分（1600 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+13</b> / −12 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+22</b> / −21</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+7</b> / −7 <span style="color: #969799;">|</span> 低分赢（冷门）→ <b style="color: #07c160;">+13</b> / −13</div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 600; margin-bottom: 4px;">差 300 分（1800 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+6</b> / −5 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+28</b> / −27</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+3</b> / −3 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+17</b> / −17</div>
         </div>
         <div>
           <div style="font-weight: 600; margin-bottom: 4px;">差 500 分（2000 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+3</b> / −2 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+31</b> / −30</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+1</b> / −1 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+19</b> / −19</div>
         </div>
         <div style="background: #fffbe6; padding: 12px; border-radius: 8px; margin-top: 16px; font-size: 13px; color: #ad8b00;">
-          💡 低分赢高分的奖励：差100→+22，差300→+28，差500→+31。差距越大，冷门奖励越大，符合直觉。
+          💡 新人 K=40：上述数字 ×2。差距越大冷门奖励越大（+13→+17→+19），符合直觉。
         </div>
       </div>
 
@@ -91,19 +91,6 @@ const router = useRouter()
         </div>
       </div>
 
-      <!-- 胜者奖励 -->
-      <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">💉 胜者奖励分</h3>
-        <p style="font-size: 14px; color: #666; line-height: 1.8;">
-          封闭小圈子长期互打，<b>总分恒定</b>会导致水平提升无法体现在积分上。<br>
-          因此引入胜者奖励：每场胜者额外 <b style="color: #07c160;">+1 分</b>（不扣败者）。
-        </p>
-        <div style="margin-top: 12px; padding: 12px; background: #f0f6ff; border-radius: 8px; font-size: 13px;">
-          <div>• 每场向系统注入 1 分，打破零和困局</div>
-          <div>• 持续赢球的人积分自然上涨</div>
-          <div>• 通过环境变量 <code>RATING_BONUS=1</code> 控制（可调可关）</div>
-        </div>
-      </div>
 
       <!-- 弃权 -->
       <div class="card" style="margin: 0 0 12px;">

@@ -1,25 +1,26 @@
 package rating
 
-import (
-	"math"
-	"os"
-	"strconv"
-)
+import "math"
 
-// winnerBonus is a small point injection to prevent rating stagnation in closed groups.
-// Set RATING_BONUS env var to 1 (default 0 = USATT standard).
-var winnerBonus = func() int {
-	if v := os.Getenv("RATING_BONUS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
+// PlayerK returns the K-factor for a player based on their match count and rating.
+// Follows USATT/kaiqiuwang standard:
+//   K=40 for new players (<30 matches) — fast convergence
+//   K=20 for regular players (30+ matches) — normal
+//   K=10 for elite players (2400+) — stability
+func PlayerK(matches int, rating int) int {
+	if rating >= 2400 {
+		return 10
 	}
-	return 0
-}()
+	if matches < 30 {
+		return 40
+	}
+	return 20
+}
 
 // CalculateRatingChanges computes USATT-style rating changes for a match.
+// Each player uses their own K-factor.
 // Returns (change_for_a, change_for_b, winner_id).
-func CalculateRatingChanges(ratingA, ratingB, scoreA, scoreB int) (int, int, int) {
+func CalculateRatingChanges(ratingA, ratingB, kA, kB int, scoreA, scoreB int) (int, int, int) {
 	// Determine winner
 	winnerID := 0 // 0 means A wins, 1 means B wins
 	actualA := 1.0
@@ -34,20 +35,8 @@ func CalculateRatingChanges(ratingA, ratingB, scoreA, scoreB int) (int, int, int
 	expectedA := 1.0 / (1.0 + math.Pow(10, float64(ratingB-ratingA)/400.0))
 	expectedB := 1.0 - expectedA
 
-	// Fixed K-factor: bigger gap = bigger upset reward naturally
-	const K = 32.0
-
-	changeA := int(math.Round(K * (actualA - expectedA)))
-	changeB := int(math.Round(K * (actualB - expectedB)))
-
-	// Inject winner bonus (prevent closed-system rating stagnation)
-	if winnerBonus > 0 {
-		if winnerID == 0 {
-			changeA += winnerBonus
-		} else {
-			changeB += winnerBonus
-		}
-	}
+	changeA := int(math.Round(float64(kA) * (actualA - expectedA)))
+	changeB := int(math.Round(float64(kB) * (actualB - expectedB)))
 
 	return changeA, changeB, winnerID
 }

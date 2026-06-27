@@ -316,8 +316,15 @@ func ScoreSessionMatch(w http.ResponseWriter, r *http.Request) {
 	db.DB.QueryRow("SELECT starting_rating FROM session_players WHERE session_id=$1 AND player_id=$2", sessionID, playerAID).Scan(&srA)
 	db.DB.QueryRow("SELECT starting_rating FROM session_players WHERE session_id=$1 AND player_id=$2", sessionID, playerBID).Scan(&srB)
 
+	// Get match counts for K-factor calculation
+	var countA, countB int
+	db.DB.QueryRow("SELECT COUNT(*) FROM matches WHERE (player_a_id=$1 OR player_b_id=$1) AND score_a IS NOT NULL", playerAID).Scan(&countA)
+	db.DB.QueryRow("SELECT COUNT(*) FROM matches WHERE (player_a_id=$1 OR player_b_id=$1) AND score_a IS NOT NULL", playerBID).Scan(&countB)
+	kA := rating.PlayerK(countA, srA)
+	kB := rating.PlayerK(countB, srB)
+
 	// Calculate rating changes based on FROZEN session-start ratings (not live current_rating)
-	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(srA, srB, req.ScoreA, req.ScoreB)
+	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(srA, srB, kA, kB, req.ScoreA, req.ScoreB)
 	winnerID := playerAID
 	if winnerIdx == 1 {
 		winnerID = playerBID

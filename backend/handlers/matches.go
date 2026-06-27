@@ -42,8 +42,15 @@ func CreateMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate rating changes
-	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(ratingA, ratingB, req.ScoreA, req.ScoreB)
+	// Get match counts for K-factor calculation
+	var countA, countB int
+	db.DB.QueryRow("SELECT COUNT(*) FROM matches WHERE (player_a_id=$1 OR player_b_id=$1) AND score_a IS NOT NULL", req.PlayerAID).Scan(&countA)
+	db.DB.QueryRow("SELECT COUNT(*) FROM matches WHERE (player_a_id=$1 OR player_b_id=$1) AND score_a IS NOT NULL", req.PlayerBID).Scan(&countB)
+	kA := rating.PlayerK(countA, ratingA)
+	kB := rating.PlayerK(countB, ratingB)
+
+	// Calculate rating changes with per-player K
+	changeA, changeB, winnerIdx := rating.CalculateRatingChanges(ratingA, ratingB, kA, kB, req.ScoreA, req.ScoreB)
 
 	winnerID := req.PlayerAID
 	if winnerIdx == 1 {
