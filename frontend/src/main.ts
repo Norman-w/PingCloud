@@ -11,6 +11,7 @@ const routes = [
   { path: '/add-player', name: 'AddPlayer', component: () => import('./views/AddPlayer.vue') },
   { path: '/record', name: 'RecordMatch', component: () => import('./views/RecordMatch.vue') },
   { path: '/player/:id', name: 'PlayerDetail', component: () => import('./views/PlayerDetail.vue') },
+  { path: '/rules', name: 'Rules', component: () => import('./views/Rules.vue') },
 ]
 
 const router = createRouter({
