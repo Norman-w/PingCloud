@@ -16,28 +16,35 @@ const router = useRouter()
 
     <div style="padding: 16px;">
 
-      <!-- 核心公式 -->
+      <!-- 核心算法 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">🧮 核心公式</h3>
-        <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; font-size: 14px; line-height: 2;">
-          <div><b>预期胜率</b> = 1 / ( 1 + 10<sup>(对手分 − 自己分) / 400</sup> )</div>
-          <div><b>积分变化</b> = K × ( 实际结果 − 预期胜率 )</div>
-          <div style="color: #969799; margin-top: 4px;">实际结果：赢 = 1.0，输 = 0.0 · 零和系统</div>
+        <h3 style="margin-bottom: 12px;">🧮 积分算法：USATT 查表法</h3>
+        <p style="font-size: 14px; color: #666; line-height: 1.8; margin-bottom: 12px;">
+          与开球网一致，使用 <b>USATT 原始查表法</b> 而非纯 Elo 公式。
+          根据双方分差直接查表得出积分变化。
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr style="background: #f8f9fa;"><th style="padding: 8px;">分差范围</th><th style="padding: 8px;">高分赢（±）</th><th style="padding: 8px; color: #ee0a24;">低分赢（±）</th></tr>
+          <tr v-for="r in [[0,12,8,8],[13,37,7,12],[38,62,6,16],[63,87,5,20],[88,112,4,25],[113,137,3,30],[138,162,2,35],[163,187,2,40],[188,212,1,45],[213,237,1,50],[238,9999,0,50]]" :key="r[0]">
+            <td style="padding: 6px; text-align: center; border-bottom: 1px solid #f0f0f0;">{{ r[0] }}{{ r[1] >= 9999 ? '+' : '–'+r[1] }}</td>
+            <td style="padding: 6px; text-align: center; color: #1989fa; font-weight: 600;">{{ r[2] }}</td>
+            <td style="padding: 6px; text-align: center; color: #ee0a24; font-weight: 600;">{{ r[3] }}</td>
+          </tr>
+        </table>
+        <div style="background: #f0f6ff; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px;">
+          💡 以上为 <b>K=20</b> 基准值。新人 K=40 翻倍，高手 K=10 减半。
         </div>
       </div>
 
       <!-- K 因子 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">📐 K 因子（按选手经验 · 对齐开球网）</h3>
+        <h3 style="margin-bottom: 12px;">📐 K 因子（按选手经验）</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <tr style="background: #f8f9fa;"><th style="padding: 10px; text-align: left;">K 值</th><th style="padding: 10px; text-align: left;">适用条件</th><th style="padding: 10px; text-align: left;">设计原理</th></tr>
-          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">40</td><td style="padding: 10px;">新选手（比赛 &lt; 30 场）</td><td style="padding: 10px; font-size: 13px;">快速收敛到真实水平</td></tr>
-          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">20</td><td style="padding: 10px;">常规选手（比赛 ≥ 30 场）</td><td style="padding: 10px; font-size: 13px;">正常速度，平衡稳定</td></tr>
-          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">10</td><td style="padding: 10px;">高手（积分 ≥ 2400）</td><td style="padding: 10px; font-size: 13px;">长期稳定，防剧烈波动</td></tr>
+          <tr style="background: #f8f9fa;"><th style="padding: 10px; text-align: left;">K 值</th><th style="padding: 10px; text-align: left;">适用条件</th><th style="padding: 10px; text-align: left;">相当于</th></tr>
+          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">40</td><td style="padding: 10px;">新选手（比赛 &lt; 30 场）</td><td style="padding: 10px; font-size: 13px;">表值 ×2</td></tr>
+          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">20</td><td style="padding: 10px;">常规选手（比赛 ≥ 30 场）</td><td style="padding: 10px; font-size: 13px;">表值 ×1（基准）</td></tr>
+          <tr><td style="padding: 10px; font-weight: 700; color: #1989fa; text-align: center;">10</td><td style="padding: 10px;">高手（积分 ≥ 2400）</td><td style="padding: 10px; font-size: 13px;">表值 ×0.5</td></tr>
         </table>
-        <div style="background: #f0f6ff; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px;">
-          💡 与开球网/USATT 完全一致。每人用<b>自己的 K</b>，非对称（如新人 K=40 vs 老手 K=20）。
-        </div>
       </div>
 
       <!-- 预期胜率表 -->
@@ -55,25 +62,29 @@ const router = useRouter()
 
       <!-- 实战举例 -->
       <div class="card" style="margin: 0 0 12px;">
-        <h3 style="margin-bottom: 12px;">⚔️ 实战举例（老手 K=20）</h3>
+        <h3 style="margin-bottom: 12px;">⚔️ 实战举例（K=20 基准）</h3>
         <div style="margin-bottom: 16px;">
-          <div style="font-weight: 600; margin-bottom: 4px;">同分段（1500 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">胜者 <b style="color: #07c160;">+10</b>，败者 <b style="color: #ee0a24;">−10</b>（零和）</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">同分段（差 0-12）</div>
+          <div style="font-size: 13px; color: #666;">胜者 <b style="color: #07c160;">+8</b>，败者 <b style="color: #ee0a24;">−8</b></div>
         </div>
         <div style="margin-bottom: 16px;">
-          <div style="font-weight: 600; margin-bottom: 4px;">差 100 分（1600 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+7</b> / −7 <span style="color: #969799;">|</span> 低分赢（冷门）→ <b style="color: #07c160;">+13</b> / −13</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">差 50 分（1600 vs 1550）</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+6</b> / −6 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+16</b> / −16</div>
         </div>
         <div style="margin-bottom: 16px;">
-          <div style="font-weight: 600; margin-bottom: 4px;">差 300 分（1800 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+3</b> / −3 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+17</b> / −17</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">差 100 分（1650 vs 1550）</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+4</b> / −4 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+25</b> / −25</div>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <div style="font-weight: 600; margin-bottom: 4px;">差 130 分（1680 vs 1550）</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+3</b> / −3 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+30</b> / −30 🔥</div>
         </div>
         <div>
-          <div style="font-weight: 600; margin-bottom: 4px;">差 500 分（2000 vs 1500）</div>
-          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+1</b> / −1 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+19</b> / −19</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">差 200 分（1750 vs 1550）</div>
+          <div style="font-size: 13px; color: #666;">高分赢 → <b style="color: #07c160;">+1</b> / −1 <span style="color: #969799;">|</span> 低分赢 → <b style="color: #07c160;">+45</b> / −45</div>
         </div>
         <div style="background: #fffbe6; padding: 12px; border-radius: 8px; margin-top: 16px; font-size: 13px; color: #ad8b00;">
-          💡 新人 K=40：上述数字 ×2。差距越大冷门奖励越大（+13→+17→+19），符合直觉。
+          💡 差 130 低分赢 = <b>+30</b>（K=20）。新人 K=40 → +60。与你开球网实战一致。
         </div>
       </div>
 
