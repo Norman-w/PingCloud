@@ -106,6 +106,7 @@ function winRate(p: RankingEntry) {
           <div class="player-name">{{ p.name }}</div>
           <div class="player-record">
             {{ p.matches_played }} 场 · {{ p.wins }} 胜 {{ p.losses }} 负
+            <template v-if="p.forfeits"> · 弃权 {{ p.forfeits }}</template>
             · 胜率 {{ winRate(p) }}
           </div>
         </div>

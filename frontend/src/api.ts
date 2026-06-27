@@ -12,6 +12,8 @@ export interface RankingEntry extends Player {
   matches_played: number
   wins: number
   losses: number
+  forfeit_wins: number
+  forfeits: number
   win_rate: number
 }
 

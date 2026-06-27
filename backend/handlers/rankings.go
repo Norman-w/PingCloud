@@ -8,15 +8,17 @@ import (
 )
 
 func GetRankings(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.DB.Query(
-		`SELECT p.id, p.name, p.initial_rating, p.current_rating, p.created_at,
-		        COUNT(m.id) AS matches_played,
-		        COALESCE(SUM(CASE WHEN m.winner_id = p.id THEN 1 ELSE 0 END), 0) AS wins,
-		        COALESCE(SUM(CASE WHEN m.winner_id != p.id THEN 1 ELSE 0 END), 0) AS losses
-		 FROM players p
-		 LEFT JOIN matches m ON m.player_a_id = p.id OR m.player_b_id = p.id
-		 GROUP BY p.id
-		 ORDER BY p.current_rating DESC`)
+	rows, err := db.DB.Query(`
+		SELECT p.id, p.name, p.initial_rating, p.current_rating, p.created_at,
+			COUNT(m.id) AS matches_played,
+			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.forfeit = false THEN 1 ELSE 0 END), 0) AS wins,
+			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.forfeit = false THEN 1 ELSE 0 END), 0) AS losses,
+			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.forfeit = true THEN 1 ELSE 0 END), 0) AS forfeit_wins,
+			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.forfeit = true THEN 1 ELSE 0 END), 0) AS forfeits
+		FROM players p
+		LEFT JOIN matches m ON (m.player_a_id = p.id OR m.player_b_id = p.id)
+		GROUP BY p.id
+		ORDER BY p.current_rating DESC`)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -25,9 +27,11 @@ func GetRankings(w http.ResponseWriter, r *http.Request) {
 
 	type RankingEntry struct {
 		models.Player
-		MatchesPlayed int `json:"matches_played"`
-		Wins          int `json:"wins"`
-		Losses        int `json:"losses"`
+		MatchesPlayed int     `json:"matches_played"`
+		Wins          int     `json:"wins"`
+		Losses        int     `json:"losses"`
+		ForfeitWins   int     `json:"forfeit_wins"`
+		Forfeits      int     `json:"forfeits"`
 		WinRate       float64 `json:"win_rate"`
 	}
 
@@ -35,7 +39,7 @@ func GetRankings(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var re RankingEntry
 		if err := rows.Scan(&re.ID, &re.Name, &re.InitialRating, &re.CurrentRating, &re.CreatedAt,
-			&re.MatchesPlayed, &re.Wins, &re.Losses); err != nil {
+			&re.MatchesPlayed, &re.Wins, &re.Losses, &re.ForfeitWins, &re.Forfeits); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
