@@ -42,6 +42,8 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function isWin(m: Match, playerId: number) { return m.winner_id === playerId }
+
 const totalMatches = () => wins.value + losses.value
 const winRate = () => totalMatches() > 0 ? (wins.value / totalMatches() * 100).toFixed(0) + '%' : '-'
 </script>

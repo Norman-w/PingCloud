@@ -1,6 +1,21 @@
 package rating
 
-import "math"
+import (
+	"math"
+	"os"
+	"strconv"
+)
+
+// winnerBonus is a small point injection to prevent rating stagnation in closed groups.
+// Set RATING_BONUS env var to 1 (default 0 = USATT standard).
+var winnerBonus = func() int {
+	if v := os.Getenv("RATING_BONUS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 0
+}()
 
 // CalculateRatingChanges computes USATT-style rating changes for a match.
 // Returns (change_for_a, change_for_b, winner_id).
@@ -24,6 +39,15 @@ func CalculateRatingChanges(ratingA, ratingB, scoreA, scoreB int) (int, int, int
 
 	changeA := int(math.Round(kFactor * (actualA - expectedA)))
 	changeB := int(math.Round(kFactor * (actualB - expectedB)))
+
+	// Inject winner bonus (prevent closed-system rating stagnation)
+	if winnerBonus > 0 {
+		if winnerID == 0 {
+			changeA += winnerBonus
+		} else {
+			changeB += winnerBonus
+		}
+	}
 
 	return changeA, changeB, winnerID
 }
