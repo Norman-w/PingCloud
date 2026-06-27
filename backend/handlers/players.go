@@ -49,15 +49,16 @@ func GetPlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Also fetch match history
+	// Fetch match history with forfeit info
 	rows, err := db.DB.Query(
 		`SELECT m.id, m.player_a_id, m.player_b_id, m.score_a, m.score_b,
 		        m.rating_change_a, m.rating_change_b, m.winner_id, m.played_at,
+		        COALESCE(m.forfeit, false),
 		        pa.name, pb.name
 		 FROM matches m
 		 JOIN players pa ON pa.id = m.player_a_id
 		 JOIN players pb ON pb.id = m.player_b_id
-		 WHERE m.player_a_id = $1 OR m.player_b_id = $1
+		 WHERE (m.player_a_id = $1 OR m.player_b_id = $1) AND m.score_a IS NOT NULL
 		 ORDER BY m.played_at DESC LIMIT 20`, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -70,16 +71,30 @@ func GetPlayer(w http.ResponseWriter, r *http.Request) {
 		var m models.Match
 		if err := rows.Scan(&m.ID, &m.PlayerAID, &m.PlayerBID, &m.ScoreA, &m.ScoreB,
 			&m.RatingChangeA, &m.RatingChangeB, &m.WinnerID, &m.PlayedAt,
-			&m.PlayerAName, &m.PlayerBName); err != nil {
+			&m.Forfeit, &m.PlayerAName, &m.PlayerBName); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		matches = append(matches, m)
 	}
 
+	// Fetch stats (excluding forfeits)
+	var wins, losses, forfeitWins, forfeits int
+	db.DB.QueryRow(`SELECT
+		COALESCE(SUM(CASE WHEN winner_id=$1 AND forfeit=false THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN winner_id IS NOT NULL AND winner_id!=$1 AND forfeit=false THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN winner_id=$1 AND forfeit=true THEN 1 ELSE 0 END),0),
+		COALESCE(SUM(CASE WHEN winner_id IS NOT NULL AND winner_id!=$1 AND forfeit=true THEN 1 ELSE 0 END),0)
+		FROM matches WHERE (player_a_id=$1 OR player_b_id=$1) AND score_a IS NOT NULL`,
+		id).Scan(&wins, &losses, &forfeitWins, &forfeits)
+
 	writeJSON(w, map[string]interface{}{
-		"player":  p,
-		"matches": matches,
+		"player":       p,
+		"matches":      matches,
+		"wins":         wins,
+		"losses":       losses,
+		"forfeit_wins": forfeitWins,
+		"forfeits":     forfeits,
 	})
 }
 

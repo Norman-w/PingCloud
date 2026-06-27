@@ -28,12 +28,17 @@ export interface Match {
   rating_change_a: number
   rating_change_b: number
   winner_id: number
+  forfeit: boolean
   played_at: string
 }
 
 export interface PlayerDetail {
   player: Player
   matches: Match[]
+  wins: number
+  losses: number
+  forfeit_wins: number
+  forfeits: number
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {

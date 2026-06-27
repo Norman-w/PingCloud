@@ -13,6 +13,7 @@ type Match struct {
 	RatingChangeA  int       `json:"rating_change_a"`
 	RatingChangeB  int       `json:"rating_change_b"`
 	WinnerID       int       `json:"winner_id"`
+	Forfeit        bool      `json:"forfeit"`
 	PlayedAt       time.Time `json:"played_at"`
 }
 
