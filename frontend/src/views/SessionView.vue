@@ -350,7 +350,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
             </div>
             <div style="flex: 1; margin-left: 12px;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ p.id }}</span></div>
-              <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
+              <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负 <template v-if="p.forfeits">· 弃权{{ p.forfeits }}</template></div>
             </div>
             <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession!.matches) }}</div>
           </div>
@@ -426,7 +426,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
             </div>
             <div style="flex: 1; margin-left: 12px;">
               <div style="font-size: 16px; font-weight: 500;" :style="{ fontSize: i < 3 ? '18px' : '16px', fontWeight: i < 3 ? 700 : 500 }">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ p.id }}</span></div>
-              <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
+              <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负 <template v-if="p.forfeits">· 弃权{{ p.forfeits }}</template></div>
             </div>
             <div style="text-align: right;">
               <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession!.matches) }}</div>
@@ -452,7 +452,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               <span style="font-size:10px;color:#c8c9cc;">{{ m.player_a_id }}号</span> {{ m.player_a_name }}
               <span style="font-size:10px;display:block;" :style="{ color: m.rating_change_a >= 0 ? '#07c160' : '#ee0a24' }">{{ changeSign(m.rating_change_a) }}{{ m.rating_change_a }}</span>
             </div>
-            <div style="width: 64px; text-align: center; font-weight: 700; font-size: 16px;">{{ m.score_a }} : {{ m.score_b }}</div>
+            <div style="width: 64px; text-align: center; font-weight: 700; font-size: 16px;"><template v-if="m.forfeit"><span style="color:#ff976a;font-weight:600;">弃权</span></template><template v-else>{{ m.score_a }} : {{ m.score_b }}</template></div>
             <div style="flex: 1; font-weight: 400;" :style="{ fontWeight: m.winner_id === m.player_b_id ? 700 : 400 }">
               <span style="font-size:10px;color:#c8c9cc;">{{ m.player_b_id }}号</span> {{ m.player_b_name }}
               <span style="font-size:10px;display:block;" :style="{ color: m.rating_change_b >= 0 ? '#07c160' : '#ee0a24' }">{{ changeSign(m.rating_change_b) }}{{ m.rating_change_b }}</span>

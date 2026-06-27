@@ -38,6 +38,8 @@ type SessionPlayer struct {
 	StartingRating int    `json:"starting_rating"`
 	Wins           int    `json:"wins"`
 	Losses         int    `json:"losses"`
+	ForfeitWins    int    `json:"forfeit_wins"`
+	Forfeits       int    `json:"forfeits"`
 }
 
 type SessionMatch struct {
@@ -205,11 +207,13 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 		detail.CreatedAt = t.String()
 	}
 
-	// Get session players with stats + frozen starting rating
+	// Get session players with stats (excluding forfeits from losses)
 	rows, err := db.DB.Query(`
 		SELECT p.id, p.name, sp.starting_rating,
-			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS wins,
-			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS losses
+			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.forfeit = false AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS wins,
+			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.forfeit = false AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS losses,
+			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.forfeit = true AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS forfeit_wins,
+			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.forfeit = true AND m.session_id = $1 THEN 1 ELSE 0 END), 0) AS forfeits
 		FROM session_players sp
 		JOIN players p ON p.id = sp.player_id
 		LEFT JOIN matches m ON (m.player_a_id = p.id OR m.player_b_id = p.id) AND m.session_id = $1
@@ -226,7 +230,7 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 	detail.Players = make([]SessionPlayer, 0)
 	for rows.Next() {
 		var sp SessionPlayer
-		if err := rows.Scan(&sp.ID, &sp.Name, &sp.StartingRating, &sp.Wins, &sp.Losses); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.StartingRating, &sp.Wins, &sp.Losses, &sp.ForfeitWins, &sp.Forfeits); err != nil {
 			continue
 		}
 		detail.Players = append(detail.Players, sp)

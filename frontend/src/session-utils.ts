@@ -11,6 +11,7 @@ export interface SessionMatch {
 export interface SessionPlayer {
   id: number; name: string; starting_rating: number
   wins: number; losses: number
+  forfeit_wins: number; forfeits: number
 }
 
 export interface SessionDetail {
