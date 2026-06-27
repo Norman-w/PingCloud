@@ -52,7 +52,8 @@ type SessionMatch struct {
 	RatingChangeA  int    `json:"rating_change_a"`
 	RatingChangeB  int    `json:"rating_change_b"`
 	WinnerID       int    `json:"winner_id"`
-	Played         bool   `json:"played"` // whether score has been recorded
+	Played         bool   `json:"played"`
+	Forfeit        bool   `json:"forfeit"`
 }
 
 type SessionDetail struct {
@@ -236,7 +237,7 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 		SELECT m.id, m.round, m.player_a_id, m.player_b_id,
 			COALESCE(m.score_a, -1), COALESCE(m.score_b, -1),
 			COALESCE(m.rating_change_a, 0), COALESCE(m.rating_change_b, 0),
-			COALESCE(m.winner_id, 0),
+			COALESCE(m.winner_id, 0), COALESCE(m.forfeit, false),
 			pa.name, pb.name
 		FROM matches m
 		JOIN players pa ON pa.id = m.player_a_id
@@ -255,7 +256,7 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 		var sm SessionMatch
 		var scoreA, scoreB, winnerID int
 		if err := mRows.Scan(&sm.ID, &sm.Round, &sm.PlayerAID, &sm.PlayerBID,
-			&scoreA, &scoreB, &sm.RatingChangeA, &sm.RatingChangeB, &winnerID,
+			&scoreA, &scoreB, &sm.RatingChangeA, &sm.RatingChangeB, &winnerID, &sm.Forfeit,
 			&sm.PlayerAName, &sm.PlayerBName); err != nil {
 			continue
 		}
@@ -343,6 +344,63 @@ func ScoreSessionMatch(w http.ResponseWriter, r *http.Request) {
 		"rating_change_b": changeB,
 		"winner_id":       winnerID,
 		"corrected":       existingScoreA.Valid,
+	})
+}
+
+func ForfeitMatch(w http.ResponseWriter, r *http.Request) {
+	// URL: /api/sessions/{sessionID}/matches/{matchID}/forfeit
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 || parts[1] != "matches" || parts[3] != "forfeit" {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	sessionID, _ := strconv.Atoi(parts[0])
+	matchID, _ := strconv.Atoi(parts[2])
+
+	var req struct {
+		WinnerID int `json:"winner_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Verify match belongs to session
+	var pa, pb int
+	var existing sql.NullInt64
+	err := db.DB.QueryRow(
+		"SELECT player_a_id, player_b_id, score_a FROM matches WHERE id=$1 AND session_id=$2",
+		matchID, sessionID,
+	).Scan(&pa, &pb, &existing)
+	if err != nil {
+		http.Error(w, "match not found", http.StatusNotFound)
+		return
+	}
+
+	// If correcting, clear old result first
+	if existing.Valid {
+		var oldA, oldB int
+		db.DB.QueryRow("SELECT rating_change_a, rating_change_b FROM matches WHERE id=$1", matchID).Scan(&oldA, &oldB)
+		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldA, pa)
+		db.DB.Exec("UPDATE players SET current_rating = current_rating - $1 WHERE id = $2", oldB, pb)
+	}
+
+	// Forfeit: no rating changes, set winner
+	_, err = db.DB.Exec(`
+		UPDATE matches SET score_a=0, score_b=0, rating_change_a=0, rating_change_b=0,
+		winner_id=$1, forfeit=true WHERE id=$2`,
+		req.WinnerID, matchID,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"id":       matchID,
+		"forfeit":  true,
+		"winner_id": req.WinnerID,
 	})
 }
 

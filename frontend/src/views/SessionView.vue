@@ -123,6 +123,19 @@ async function createSession() {
 
 function openScoreEditor(match: SessionMatch) { scoringMatch.value = match; showEditDialog.value = true }
 
+async function handleForfeit(winnerId: number) {
+  if (!scoringMatch.value || !currentSession.value) return
+  try {
+    await fetch(`/api/sessions/${currentSession.value.id}/matches/${scoringMatch.value.id}/forfeit`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winner_id: winnerId }),
+    })
+    const detail = await fetch(`/api/sessions/${currentSession.value.id}`).then(r => r.json())
+    currentSession.value = detail
+    showEditDialog.value = false
+  } catch (e: any) { showToast('操作失败') }
+}
+
 async function handleScoreSubmit(scoreA: number, scoreB: number) {
   if (!scoringMatch.value || !currentSession.value) return
   try {
@@ -358,7 +371,8 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               <span v-if="m.played" style="font-size: 11px; display: block;" :style="{ color: m.rating_change_a >= 0 ? '#07c160' : '#ee0a24' }">{{ m.rating_change_a >= 0 ? '+' : '' }}{{ m.rating_change_a }}</span>
             </div>
             <div style="width: 64px; text-align: center; font-weight: 700; font-size: 16px;">
-              <template v-if="m.played">{{ m.score_a }} : {{ m.score_b }}</template>
+              <template v-if="m.forfeit"><span style="color:#ff976a;font-weight:600;font-size:14px;">弃权</span></template>
+              <template v-else-if="m.played">{{ m.score_a }} : {{ m.score_b }}</template>
               <template v-else><span style="color: #c8c9cc; font-size: 13px;">待录入</span></template>
             </div>
             <div style="flex: 1; font-weight: 400;" :style="{ fontWeight: m.winner_id === m.player_b_id ? 700 : 400 }">
@@ -467,12 +481,15 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
     <!-- Score Editor Dialog -->
     <ScoreDialog
       :show="showEditDialog"
+      :player-a-id="scoringMatch?.player_a_id || 0"
+      :player-b-id="scoringMatch?.player_b_id || 0"
       :player-a-name="scoringMatch?.player_a_name || ''"
       :player-b-name="scoringMatch?.player_b_name || ''"
       :initial-score-a="scoringMatch?.played ? scoringMatch.score_a : undefined"
       :initial-score-b="scoringMatch?.played ? scoringMatch.score_b : undefined"
       @update:show="showEditDialog = $event"
       @submit="handleScoreSubmit"
+      @forfeit="handleForfeit"
     />
   </div>
 </template>

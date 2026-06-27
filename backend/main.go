@@ -67,6 +67,7 @@ func main() {
 
 		switch r.Method {
 		case http.MethodPost:
+			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/forfeit") { handlers.ForfeitMatch(w, r); return }
 			if strings.Contains(path, "/matches/") { handlers.ScoreSessionMatch(w, r); return }
 			if strings.HasSuffix(path, "/complete") || strings.HasSuffix(path, "complete") { handlers.CompleteSession(w, r); return }
 			if strings.HasSuffix(path, "/players") || strings.Contains(path, "/players") { handlers.AddPlayerToSession(w, r); return }

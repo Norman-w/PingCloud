@@ -5,7 +5,7 @@ export interface SessionMatch {
   player_a_name: string; player_b_name: string
   score_a: number; score_b: number
   rating_change_a: number; rating_change_b: number
-  winner_id: number; played: boolean
+  winner_id: number; played: boolean; forfeit: boolean
 }
 
 export interface SessionPlayer {

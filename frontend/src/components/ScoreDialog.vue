@@ -3,6 +3,8 @@ import { ref, watch } from 'vue'
 
 const props = defineProps<{
   show: boolean
+  playerAId: number
+  playerBId: number
   playerAName: string
   playerBName: string
   initialScoreA?: number
@@ -12,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:show', v: boolean): void
   (e: 'submit', scoreA: number, scoreB: number): void
+  (e: 'forfeit', winnerId: number): void
 }>()
 
 const scoreA = ref('')
@@ -91,7 +94,15 @@ watch(() => props.show, (v) => {
         </button>
       </div>
 
-      <div style="display: flex; gap: 12px; margin-top: 20px;">
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button @click="emit('forfeit', playerAId)" style="flex: 1; padding: 10px; background: #fff; color: #969799; border: 1px solid #ebedf0; border-radius: 24px; font-size: 13px; cursor: pointer;">
+          {{ playerBName }}弃权
+        </button>
+        <button @click="emit('forfeit', playerBId)" style="flex: 1; padding: 10px; background: #fff; color: #969799; border: 1px solid #ebedf0; border-radius: 24px; font-size: 13px; cursor: pointer;">
+          {{ playerAName }}弃权
+        </button>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: 12px;">
         <button @click="onCancel" style="flex: 1; padding: 14px; background: #f5f5f5; border: none; border-radius: 24px; font-size: 15px; cursor: pointer;">取消</button>
         <button @click="onSubmit" :disabled="submitting" style="flex: 2; padding: 14px; background: #1989fa; color: #fff; border: none; border-radius: 24px; font-size: 15px; font-weight: 600; cursor: pointer;">
           {{ submitting ? '提交中...' : '确认提交' }}
