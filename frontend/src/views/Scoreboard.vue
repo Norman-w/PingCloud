@@ -137,12 +137,20 @@ function endTimeout() {
   alertMsg.value = ''
 }
 
-// Net touch
-function toggleNetTouch(side: 'A' | 'B') {
-  if (netTouch.value && netTouchSide.value === side) { netTouch.value = false; netTouchSide.value = null }
-  else {
-    netTouch.value = true; netTouchSide.value = side
-    showAlert(`擦网！${side === 'A' ? nameA.value : nameB.value}`)
+// Net touch: full-screen alert
+function toggleNetTouch() {
+  netTouch.value = !netTouch.value
+  if (netTouch.value) showAlert('擦网！', 3000)
+  else alertMsg.value = ''
+}
+
+// Manual fullscreen toggle
+async function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    await document.exitFullscreen().catch(() => {})
+  } else {
+    if (container.value?.requestFullscreen) await container.value.requestFullscreen()
+    await (screen.orientation as any)?.lock?.('landscape').catch(() => {})
   }
 }
 
@@ -231,7 +239,7 @@ function exitScoreboard() {
 
         <!-- Alert overlay -->
         <div v-if="alertMsg" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
-          <div style="font-size:48px;font-weight:900;text-align:center;">{{ alertMsg }}</div>
+          <div style="font-size:64px;font-weight:900;text-align:center;text-shadow:0 0 40px rgba(231,76,60,0.8);">{{ alertMsg }}</div>
           <div v-if="timeoutCountdown>0" style="font-size:80px;font-weight:900;color:#f1c40f;">{{ timeoutCountdown }}</div>
           <button v-if="timeoutCountdown>0" @click="endTimeout" style="padding:12px 32px;background:#e74c3c;border:none;color:#fff;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">提前结束</button>
         </div>
@@ -253,6 +261,7 @@ function exitScoreboard() {
           <button @click="exitScoreboard" style="background:none;border:none;color:#fff;font-size:12px;cursor:pointer;">&#8592;</button>
           <span style="font-size:12px;font-weight:600;">{{ format==='11'?'11分':format==='golden'?'金球':'抢7' }} · {{ gamesToWin===1?'单局':gamesToWin===2?'三局两胜':gamesToWin===3?'五局三胜':'七局四胜' }}</span>
           <div style="display:flex;gap:4px;">
+            <button @click="toggleFullscreen" style="background:#333;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">⛶</button>
             <button @click="swapSides" style="background:#333;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">⇄换边</button>
             <button @click="reset" style="background:#c0392b;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">重置</button>
           </div>
@@ -322,7 +331,7 @@ function exitScoreboard() {
         <!-- Bottom controls -->
         <div style="padding:4px 8px 8px;background:#111;flex-shrink:0;">
           <div style="display:flex;justify-content:center;gap:10px;">
-            <button @click="netTouch=!netTouch" style="padding:6px 18px;border-radius:6px;border:2px solid;font-size:12px;cursor:pointer;"
+            <button @click="toggleNetTouch()" style="padding:6px 18px;border-radius:6px;border:2px solid;font-size:12px;cursor:pointer;"
               :style="netTouch?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#666',borderColor:'#333'}">擦网</button>
             <button @click="undoPoint" style="background:#333;border:none;color:#aaa;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;">↩ 撤销</button>
           </div>
