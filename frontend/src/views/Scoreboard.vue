@@ -16,12 +16,27 @@ const firstServer = ref<'A' | 'B'>('A')
 const pointA = ref(0); const pointB = ref(0)
 const gameA = ref(0); const gameB = ref(0)
 
-// Server (auto-switch every 2 points)
+// Server: every 2 pts normally, every 1 pt at deuce (10-10+)
+const serveSwitch = computed(() => {
+  if (pointA.value >= 10 && pointB.value >= 10) return 1 // deuce: every point
+  return 2 // normal: every 2 points
+})
 const totalPoints = computed(() => pointA.value + pointB.value)
 const server = computed(() => {
-  const half = Math.floor(totalPoints.value / 2)
+  const half = Math.floor(totalPoints.value / serveSwitch.value)
   return half % 2 === 0 ? firstServer.value : (firstServer.value === 'A' ? 'B' : 'A')
 })
+
+// Game history: record each game's score
+const gameHistory = ref<{a:number,b:number}[]>([])
+
+function advanceGame(winner: 'A' | 'B') {
+  gameHistory.value.push({ a: pointA.value, b: pointB.value })
+  if (winner === 'A') { gameA.value++ } else { gameB.value++ }
+  pointA.value = 0; pointB.value = 0
+  timeoutsA.value = 1; timeoutsB.value = 1
+  showAlert(`${nameA.value} ${gameA.value}:${gameB.value} ${nameB.value}`)
+}
 
 // Timeouts (1 per player per game)
 const timeoutsA = ref(1); const timeoutsB = ref(1)
@@ -82,12 +97,6 @@ function addPoint(side: 'A' | 'B') {
   } else {
     if ((pa >= w || pb >= w) && Math.abs(pa - pb) >= 2) advanceGame(pa > pb ? 'A' : 'B')
   }
-}
-function advanceGame(winner: 'A' | 'B') {
-  if (winner === 'A') { gameA.value++ } else { gameB.value++ }
-  pointA.value = 0; pointB.value = 0
-  timeoutsA.value = 1; timeoutsB.value = 1
-  showAlert(`${nameA.value} ${gameA.value}:${gameB.value} ${nameB.value}`)
 }
 function undoPoint() {
   if (pointA.value > 0) pointA.value--
@@ -158,6 +167,7 @@ function reset() {
   timeoutA.value = false; timeoutB.value = false
   timeoutsA.value = 1; timeoutsB.value = 1
   finish.value = false; winner.value = ''
+  gameHistory.value = []
   clearInterval(timer); alertMsg.value = ''
 }
 function swapSides() {
@@ -207,7 +217,7 @@ function exitScoreboard() {
 
         <div style="font-size:13px;color:#aaa;text-align:center;">大局</div>
         <div style="display:flex;gap:8px;">
-          <button v-for="n in [{v:1,l:'单局'},{v:2,l:'BO3'},{v:3,l:'BO5'},{v:4,l:'BO7'}]" :key="n.v" @click="gamesToWin=n.v" style="flex:1;padding:12px;border-radius:10px;border:2px solid;font-size:15px;font-weight:600;cursor:pointer;"
+          <button v-for="n in [{v:1,l:'单局'},{v:2,l:'三局两胜'},{v:3,l:'五局三胜'},{v:4,l:'七局四胜'}]" :key="n.v" @click="gamesToWin=n.v" style="flex:1;padding:12px;border-radius:10px;border:2px solid;font-size:15px;font-weight:600;cursor:pointer;"
             :style="gamesToWin===n.v?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'transparent',color:'#666',borderColor:'#333'}">{{ n.l }}</button>
         </div>
 
@@ -227,33 +237,32 @@ function exitScoreboard() {
         </div>
 
         <!-- Winner -->
-        <div v-if="finish" style="position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-          <div style="font-size:64px;font-weight:900;color:#f1c40f;">{{ winner }} 胜！</div>
-          <div style="font-size:32px;margin-top:4px;color:#aaa;">{{ gameA }} : {{ gameB }}</div>
-          <button @click="reset" style="margin-top:24px;padding:14px 36px;background:#f1c40f;border:none;color:#000;border-radius:20px;font-size:16px;font-weight:700;cursor:pointer;">重新开始</button>
+        <div v-if="finish" style="position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+          <div style="font-size:56px;font-weight:900;color:#f1c40f;">{{ winner }} 胜！</div>
+          <div style="font-size:28px;color:#aaa;">总比分 {{ gameA }} : {{ gameB }}</div>
+          <div style="font-size:16px;color:#666;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
+            <span v-for="(g,i) in gameHistory" :key="i" style="background:#222;padding:6px 14px;border-radius:8px;">
+              第{{i+1}}局 {{g.a}}:{{g.b}}
+            </span>
+          </div>
+          <button @click="reset" style="margin-top:16px;padding:14px 36px;background:#f1c40f;border:none;color:#000;border-radius:20px;font-size:16px;font-weight:700;cursor:pointer;">重新开始</button>
         </div>
 
         <!-- Top bar -->
         <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px;background:#111;flex-shrink:0;">
           <button @click="exitScoreboard" style="background:none;border:none;color:#fff;font-size:12px;cursor:pointer;">&#8592;</button>
-          <span style="font-size:12px;font-weight:600;">{{ format==='11'?'11分':format==='golden'?'金球':'抢7' }} · {{ gamesToWin===1?'单局':`BO${gamesToWin*2-1}` }}</span>
+          <span style="font-size:12px;font-weight:600;">{{ format==='11'?'11分':format==='golden'?'金球':'抢7' }} · {{ gamesToWin===1?'单局':gamesToWin===2?'三局两胜':gamesToWin===3?'五局三胜':'七局四胜' }}</span>
           <div style="display:flex;gap:4px;">
             <button @click="swapSides" style="background:#333;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">⇄换边</button>
             <button @click="reset" style="background:#c0392b;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">重置</button>
           </div>
         </div>
 
-        <!-- Server + Game score -->
-        <div style="display:flex;align-items:center;justify-content:center;gap:20px;padding:4px 0;flex-shrink:0;">
-          <div v-if="server===`A`" style="font-size:16px;color:#4fc3f7;font-weight:800;text-align:right;width:80px;animation:serve-pulse 1.5s infinite;">🏓<span style="font-size:14px;"> 发球</span></div>
-          <div v-else style="width:60px;"></div>
-          <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:44px;font-weight:900;">{{ gameA }}</span>
-            <span style="font-size:24px;color:#444;">:</span>
-            <span style="font-size:44px;font-weight:900;">{{ gameB }}</span>
-          </div>
-          <div v-if="server===`B`" style="font-size:16px;color:#4fc3f7;font-weight:800;width:80px;animation:serve-pulse 1.5s infinite;">🏓<span style="font-size:14px;"> 发球</span></div>
-          <div v-else style="width:60px;"></div>
+        <!-- Game score -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:4px 0;flex-shrink:0;">
+          <span style="font-size:44px;font-weight:900;">{{ gameA }}</span>
+          <span style="font-size:24px;color:#444;">:</span>
+          <span style="font-size:44px;font-weight:900;">{{ gameB }}</span>
         </div>
 
         <!-- Cards row -->
@@ -279,7 +288,10 @@ function exitScoreboard() {
           <div @click="addPoint('A')"
             style="flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:timeoutA?'#1a1a00':'#0d0d2b';cursor:pointer;position:relative;"
             :class="{ 'net-blink': netTouch && netTouchSide === 'A' }">
-            <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:2px;">{{ nameA }}</div>
+            <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:2px;display:flex;align-items:center;gap:8px;">
+              {{ nameA }}
+              <span v-if="server==='A'" style="font-size:24px;color:#4fc3f7;animation:serve-pulse 1.5s infinite;">🏓</span>
+            </div>
             <div style="font-size:130px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;">{{ pointA }}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
               <button @click.stop="startTimeout('A')" :disabled="timeoutsA<=0"
@@ -292,7 +304,10 @@ function exitScoreboard() {
           <div @click="addPoint('B')"
             style="flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:timeoutB?'#1a1a00':'#1a001a';cursor:pointer;position:relative;"
             :class="{ 'net-blink': netTouch && netTouchSide === 'B' }">
-            <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:2px;">{{ nameB }}</div>
+            <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:2px;display:flex;align-items:center;gap:8px;">
+              {{ nameB }}
+              <span v-if="server==='B'" style="font-size:24px;color:#4fc3f7;animation:serve-pulse 1.5s infinite;">🏓</span>
+            </div>
             <div style="font-size:130px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;">{{ pointB }}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
               <button @click.stop="startTimeout('B')" :disabled="timeoutsB<=0"
