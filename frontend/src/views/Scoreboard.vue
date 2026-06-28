@@ -39,12 +39,11 @@ if (typeof speechSynthesis !== 'undefined') {
 }
 function speak(text: string) {
   try {
-    if (!ttsReady) speechSynthesis?.getVoices()
+    if (!ttsReady) { speechSynthesis?.getVoices(); ttsReady = true }
     speechSynthesis?.cancel()
-    setTimeout(() => {
-      const u = new SpeechSynthesisUtterance(text); u.lang = 'zh-CN'; u.rate = 0.8; u.volume = 1
-      speechSynthesis?.speak(u)
-    }, 150)
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'zh-CN'; u.rate = 0.8; u.volume = 1
+    speechSynthesis?.speak(u)
   } catch (e) {}
 }
 function showAlert(msg: string, ms = 1500) {
@@ -69,7 +68,13 @@ async function startMatch() {
   if (!nameB.value.trim()) nameB.value = '客队'
   timeoutsA.value = 1; timeoutsB.value = 1; started.value = true
   keepAwake()
-  speechSynthesis?.cancel(); speechSynthesis?.speak(new SpeechSynthesisUtterance(''))
+  // Pre-warm TTS with a test utterance (required for mobile browsers)
+  try {
+    speechSynthesis?.cancel()
+    const test = new SpeechSynthesisUtterance('比赛开始')
+    test.lang = 'zh-CN'; test.volume = 0
+    speechSynthesis?.speak(test)
+  } catch(e) {}
   await nextTick(); enterFullscreen()
 }
 
