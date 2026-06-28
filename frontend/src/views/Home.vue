@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { IconPingPong, IconSwords, IconUserPlus, IconTrophy } from '@tabler/icons-vue'
+import { IconPingPong, IconSwords, IconUserPlus, IconTrophy, IconScoreboard } from '@tabler/icons-vue'
 import { api, type RankingEntry } from '../api'
 
 const router = useRouter()
@@ -80,7 +80,7 @@ function winRate(p: RankingEntry) {
         <span>添加球员</span>
       </button>
       <button class="quick-action" style="background: linear-gradient(135deg, #0a0a2e, #1a1a4e);" @click="router.push({ name: 'Scoreboard' })">
-        <span class="qa-icon" style="font-size: 28px;">📊</span>
+        <IconScoreboard :size="28" :stroke-width="2" />
         <span>记分牌</span>
       </button>
     </div>
