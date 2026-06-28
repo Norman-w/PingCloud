@@ -55,10 +55,18 @@ const alertMsg = ref('')
 let alertTimer: any = null
 function speak(text: string) {
   try {
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.0
+    // Mobile Safari: must cancel + delay before speaking
     speechSynthesis.cancel()
-    speechSynthesis.speak(u)
+    setTimeout(() => {
+      const u = new SpeechSynthesisUtterance(text)
+      u.lang = 'zh-CN'; u.rate = 0.9; u.pitch = 1.0; u.volume = 1.0
+      const voices = speechSynthesis.getVoices()
+      if (voices.length > 0) {
+        const zh = voices.find(v => v.lang.startsWith('zh'))
+        if (zh) u.voice = zh
+      }
+      speechSynthesis.speak(u)
+    }, 100)
   } catch (e) { /* not supported */ }
 }
 function showAlert(msg: string, ms = 1500) {
@@ -94,6 +102,9 @@ async function startMatch() {
   timeoutsA.value = 1; timeoutsB.value = 1
   started.value = true
   keepAwake()
+  // Pre-warm TTS with a dummy utterance (required by mobile browsers)
+  speechSynthesis.cancel()
+  speechSynthesis.speak(new SpeechSynthesisUtterance(''))
   await nextTick()
   enterFullscreen()
 }
