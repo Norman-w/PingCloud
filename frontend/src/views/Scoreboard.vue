@@ -50,14 +50,27 @@ const yellowB = ref(0); const redB = ref(0)
 // Net touch
 const netTouch = ref(false); const netTouchSide = ref<'A' | 'B' | null>(null)
 
-// Full-screen alert
+// Full-screen alert + TTS
 const alertMsg = ref('')
 let alertTimer: any = null
+function speak(text: string) {
+  try {
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.0
+    speechSynthesis.cancel()
+    speechSynthesis.speak(u)
+  } catch (e) { /* not supported */ }
+}
 function showAlert(msg: string, ms = 1500) {
   clearTimeout(alertTimer)
   alertMsg.value = msg
+  speak(msg)
   if (ms > 0) alertTimer = setTimeout(() => { alertMsg.value = '' }, ms)
 }
+
+// Serve change detection
+const prevServer = ref('')
+watch(server, (s) => { if (started.value && prevServer.value && s !== prevServer.value) showAlert(s==='A'?`${nameA.value} 发球`:`${nameB.value} 发球`); prevServer.value = s })
 
 // Wakelock
 let wakeLock: any = null
@@ -137,12 +150,8 @@ function endTimeout() {
   alertMsg.value = ''
 }
 
-// Net touch: full-screen alert
-function toggleNetTouch() {
-  netTouch.value = !netTouch.value
-  if (netTouch.value) showAlert('擦网！', 3000)
-  else alertMsg.value = ''
-}
+// Net touch: one-tap alert (no toggle)
+function tapNetTouch() { showAlert('擦网！', 2000) }
 
 // Manual fullscreen toggle
 async function toggleFullscreen() {
@@ -331,8 +340,7 @@ function exitScoreboard() {
         <!-- Bottom controls -->
         <div style="padding:4px 8px 8px;background:#111;flex-shrink:0;">
           <div style="display:flex;justify-content:center;gap:10px;">
-            <button @click="toggleNetTouch()" style="padding:6px 18px;border-radius:6px;border:2px solid;font-size:12px;cursor:pointer;"
-              :style="netTouch?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#666',borderColor:'#333'}">擦网</button>
+            <button @click="tapNetTouch()" style="padding:6px 18px;border-radius:6px;border:2px solid #333;font-size:12px;cursor:pointer;background:transparent;color:#666;">擦网</button>
             <button @click="undoPoint" style="background:#333;border:none;color:#aaa;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;">↩ 撤销</button>
           </div>
         </div>
