@@ -37,6 +37,26 @@ if (typeof speechSynthesis !== 'undefined') {
   speechSynthesis.onvoiceschanged = () => { ttsReady = true }
   speechSynthesis.getVoices()
 }
+// Beep fallback (always works)
+let audioCtx: AudioContext | null = null
+function beep(freq: number, duration: number, count = 1) {
+  try {
+    if (!audioCtx) audioCtx = new AudioContext()
+    let i = 0
+    function play() {
+      if (i >= count) return
+      const osc = audioCtx!.createOscillator()
+      const gain = audioCtx!.createGain()
+      osc.connect(gain); gain.connect(audioCtx!.destination)
+      osc.frequency.value = freq; osc.type = 'sine'
+      gain.gain.value = 0.3
+      osc.start(); osc.stop(audioCtx!.currentTime + duration / 1000)
+      i++; setTimeout(play, duration + 100)
+    }
+    play()
+  } catch(e) {}
+}
+
 function speak(text: string) {
   try {
     if (!ttsReady) { speechSynthesis?.getVoices(); ttsReady = true }
@@ -45,6 +65,13 @@ function speak(text: string) {
     u.lang = 'zh-CN'; u.rate = 0.8; u.volume = 1
     speechSynthesis?.speak(u)
   } catch (e) {}
+  // Always beep as guaranteed audible alert
+  if (text.includes('发球')) beep(880, 200, 1)
+  else if (text.includes('暂停')) beep(440, 300, 3)
+  else if (text.includes('擦网')) beep(600, 150, 2)
+  else if (text.includes('黄牌')) beep(500, 100, 2)
+  else if (text.includes('红牌')) beep(300, 200, 3)
+  else beep(1000, 150, 1)
 }
 function showAlert(msg: string, ms = 1500) {
   clearTimeout(alertTimer); alertMsg.value = msg; speak(msg)
