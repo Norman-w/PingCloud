@@ -37,9 +37,11 @@ const netTouch = ref(false); const netTouchSide = ref<'A' | 'B' | null>(null)
 
 // Full-screen alert
 const alertMsg = ref('')
+let alertTimer: any = null
 function showAlert(msg: string, ms = 1500) {
+  clearTimeout(alertTimer)
   alertMsg.value = msg
-  setTimeout(() => { alertMsg.value = '' }, ms)
+  if (ms > 0) alertTimer = setTimeout(() => { alertMsg.value = '' }, ms)
 }
 
 // Wakelock
@@ -205,8 +207,8 @@ function exitScoreboard() {
 
         <div style="font-size:13px;color:#aaa;text-align:center;">大局</div>
         <div style="display:flex;gap:8px;">
-          <button v-for="n in [1,3,5]" :key="n" @click="gamesToWin=n" style="flex:1;padding:12px;border-radius:10px;border:2px solid;font-size:15px;font-weight:600;cursor:pointer;"
-            :style="gamesToWin===n?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'transparent',color:'#666',borderColor:'#333'}">{{ n===1?'单局':`BO${n}` }}</button>
+          <button v-for="n in [{v:1,l:'单局'},{v:2,l:'BO3'},{v:3,l:'BO5'},{v:4,l:'BO7'}]" :key="n.v" @click="gamesToWin=n.v" style="flex:1;padding:12px;border-radius:10px;border:2px solid;font-size:15px;font-weight:600;cursor:pointer;"
+            :style="gamesToWin===n.v?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'transparent',color:'#666',borderColor:'#333'}">{{ n.l }}</button>
         </div>
 
         <button @click="startMatch" style="margin-top:8px;padding:16px;background:#1989fa;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;">开始比赛（全屏横屏）</button>
@@ -234,7 +236,7 @@ function exitScoreboard() {
         <!-- Top bar -->
         <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 8px;background:#111;flex-shrink:0;">
           <button @click="exitScoreboard" style="background:none;border:none;color:#fff;font-size:12px;cursor:pointer;">&#8592;</button>
-          <span style="font-size:12px;font-weight:600;">{{ format==='11'?'11分':format==='golden'?'金球':'抢7' }} · BO{{ gamesToWin*2-1||1 }}</span>
+          <span style="font-size:12px;font-weight:600;">{{ format==='11'?'11分':format==='golden'?'金球':'抢7' }} · {{ gamesToWin===1?'单局':`BO${gamesToWin*2-1}` }}</span>
           <div style="display:flex;gap:4px;">
             <button @click="swapSides" style="background:#333;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">⇄换边</button>
             <button @click="reset" style="background:#c0392b;border:none;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;cursor:pointer;">重置</button>
@@ -243,14 +245,14 @@ function exitScoreboard() {
 
         <!-- Server + Game score -->
         <div style="display:flex;align-items:center;justify-content:center;gap:20px;padding:4px 0;flex-shrink:0;">
-          <div v-if="server==='A'" style="font-size:14px;color:#4fc3f7;font-weight:700;text-align:right;width:60px;">🏓 发球</div>
+          <div v-if="server===`A`" style="font-size:16px;color:#4fc3f7;font-weight:800;text-align:right;width:80px;animation:serve-pulse 1.5s infinite;">🏓<span style="font-size:14px;"> 发球</span></div>
           <div v-else style="width:60px;"></div>
           <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:36px;font-weight:900;">{{ gameA }}</span>
+            <span style="font-size:44px;font-weight:900;">{{ gameA }}</span>
             <span style="font-size:24px;color:#444;">:</span>
-            <span style="font-size:36px;font-weight:900;">{{ gameB }}</span>
+            <span style="font-size:44px;font-weight:900;">{{ gameB }}</span>
           </div>
-          <div v-if="server==='B'" style="font-size:14px;color:#4fc3f7;font-weight:700;width:60px;">🏓 发球</div>
+          <div v-if="server===`B`" style="font-size:16px;color:#4fc3f7;font-weight:800;width:80px;animation:serve-pulse 1.5s infinite;">🏓<span style="font-size:14px;"> 发球</span></div>
           <div v-else style="width:60px;"></div>
         </div>
 
@@ -278,7 +280,7 @@ function exitScoreboard() {
             style="flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:timeoutA?'#1a1a00':'#0d0d2b';cursor:pointer;position:relative;"
             :class="{ 'net-blink': netTouch && netTouchSide === 'A' }">
             <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:2px;">{{ nameA }}</div>
-            <div style="font-size:96px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;">{{ pointA }}</div>
+            <div style="font-size:130px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;">{{ pointA }}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
               <button @click.stop="startTimeout('A')" :disabled="timeoutsA<=0"
                 style="padding:6px 16px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;"
@@ -286,13 +288,12 @@ function exitScoreboard() {
                 暂停 {{ timeoutsA }}
               </button>
             </div>
-            <div v-if="server==='A'" style="font-size:12px;color:#4fc3f7;margin-top:4px;">🏓 发球方</div>
           </div>
           <div @click="addPoint('B')"
             style="flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:timeoutB?'#1a1a00':'#1a001a';cursor:pointer;position:relative;"
             :class="{ 'net-blink': netTouch && netTouchSide === 'B' }">
             <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:2px;">{{ nameB }}</div>
-            <div style="font-size:96px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;">{{ pointB }}</div>
+            <div style="font-size:130px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;">{{ pointB }}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
               <button @click.stop="startTimeout('B')" :disabled="timeoutsB<=0"
                 style="padding:6px 16px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;"
@@ -300,18 +301,15 @@ function exitScoreboard() {
                 暂停 {{ timeoutsB }}
               </button>
             </div>
-            <div v-if="server==='B'" style="font-size:12px;color:#4fc3f7;margin-top:4px;">🏓 发球方</div>
           </div>
         </div>
 
         <!-- Bottom controls -->
         <div style="padding:4px 8px 8px;background:#111;flex-shrink:0;">
           <div style="display:flex;justify-content:center;gap:10px;">
-            <button @click="toggleNetTouch('A')" style="padding:6px 12px;border-radius:6px;border:2px solid;font-size:12px;cursor:pointer;"
-              :style="netTouch&&netTouchSide==='A'?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#666',borderColor:'#333'}">{{ nameA }}擦网</button>
-            <button @click="undoPoint" style="background:#333;border:none;color:#aaa;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;">↩撤销</button>
-            <button @click="toggleNetTouch('B')" style="padding:6px 12px;border-radius:6px;border:2px solid;font-size:12px;cursor:pointer;"
-              :style="netTouch&&netTouchSide==='B'?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#666',borderColor:'#333'}">{{ nameB }}擦网</button>
+            <button @click="netTouch=!netTouch" style="padding:6px 18px;border-radius:6px;border:2px solid;font-size:12px;cursor:pointer;"
+              :style="netTouch?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#666',borderColor:'#333'}">擦网</button>
+            <button @click="undoPoint" style="background:#333;border:none;color:#aaa;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;">↩ 撤销</button>
           </div>
         </div>
       </div>
@@ -324,5 +322,21 @@ function exitScoreboard() {
 @keyframes net-blink {
   0%,100% { background: inherit; }
   50% { background: rgba(231,76,60,0.3); }
+}
+@keyframes serve-pulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+</style>
+
+<style>
+.net-blink { animation: net-blink 0.5s ease-in-out 2; }
+@keyframes net-blink {
+  0%,100% { background: inherit; }
+  50% { background: rgba(231,76,60,0.3); }
+}
+@keyframes serve-pulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 </style>
