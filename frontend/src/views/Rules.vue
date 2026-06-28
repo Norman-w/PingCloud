@@ -10,7 +10,6 @@ const router = useRouter()
         <span @click="router.back()" style="cursor: pointer; font-size: 22px;">&#8592;</span>
         <div class="hero-title">积分规则</div>
       </div>
-      <div class="hero-sub">友谊第一，比赛第二</div>
     </div>
 
     <div style="padding: 16px;">
@@ -105,5 +104,12 @@ const router = useRouter()
       </div>
 
     </div>
+
+    <div style="padding: 16px;">
+      <button @click="router.back()" style="width: 100%; padding: 16px; background: #1989fa; color: #fff; border: none; border-radius: 24px; font-size: 17px; font-weight: 600; cursor: pointer;">
+        返回首页
+      </button>
+    </div>
+
   </div>
 </template>

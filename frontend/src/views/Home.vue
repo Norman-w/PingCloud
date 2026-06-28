@@ -52,10 +52,7 @@ function winRate(p: RankingEntry) {
         <IconPingPong :size="28" :stroke-width="2" style="vertical-align: -5px; margin-right: 4px;" />
         乒云
       </div>
-      <div class="hero-sub">
-        乒乓球积分排名系统
-        <span @click="router.push({ name: 'Rules' })" style="margin-left: 8px; background: rgba(255,255,255,0.2); padding: 2px 10px; border-radius: 10px; font-size: 12px; cursor: pointer;">积分规则 ▸</span>
-      </div>
+      <div class="hero-sub">乒乓球积分排名系统</div>
     </div>
 
     <div class="stats-row">
@@ -84,9 +81,14 @@ function winRate(p: RankingEntry) {
       </button>
     </div>
 
-    <div class="section-title">
-      <IconTrophy :size="18" :stroke-width="2" style="vertical-align: -3px; margin-right: 6px;" />
-      积分排行
+    <div class="section-title" style="justify-content: space-between;">
+      <span>
+        <IconTrophy :size="18" :stroke-width="2" style="vertical-align: -3px; margin-right: 6px;" />
+        积分排行
+      </span>
+      <span @click="router.push({ name: 'Rules' })" style="font-size: 13px; color: #1989fa; font-weight: 600; cursor: pointer; background: #e8f4ff; padding: 4px 12px; border-radius: 12px;">
+        积分规则 ▸
+      </span>
     </div>
 
     <van-loading v-if="loading" class="empty-state" />
