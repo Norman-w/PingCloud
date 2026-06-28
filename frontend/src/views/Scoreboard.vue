@@ -49,7 +49,7 @@ function beep(freq: number, duration: number, count = 1) {
       const gain = audioCtx!.createGain()
       osc.connect(gain); gain.connect(audioCtx!.destination)
       osc.frequency.value = freq; osc.type = 'sine'
-      gain.gain.value = 0.3
+      gain.gain.value = 0.6
       osc.start(); osc.stop(audioCtx!.currentTime + duration / 1000)
       i++; setTimeout(play, duration + 100)
     }
@@ -95,12 +95,18 @@ async function startMatch() {
   if (!nameB.value.trim()) nameB.value = '客队'
   timeoutsA.value = 1; timeoutsB.value = 1; started.value = true
   keepAwake()
-  // Pre-warm TTS with a test utterance (required for mobile browsers)
+  // Pre-warm AudioContext + TTS (required for mobile browsers)
+  try {
+    audioCtx = new AudioContext()
+    const o = audioCtx.createOscillator(); const g = audioCtx.createGain()
+    o.connect(g); g.connect(audioCtx.destination)
+    o.frequency.value = 880; g.gain.value = 0.01
+    o.start(); o.stop(audioCtx.currentTime + 0.01)
+  } catch(e) {}
   try {
     speechSynthesis?.cancel()
-    const test = new SpeechSynthesisUtterance('比赛开始')
-    test.lang = 'zh-CN'; test.volume = 0
-    speechSynthesis?.speak(test)
+    const test = new SpeechSynthesisUtterance('')
+    test.volume = 0; speechSynthesis?.speak(test)
   } catch(e) {}
   await nextTick(); enterFullscreen()
 }
