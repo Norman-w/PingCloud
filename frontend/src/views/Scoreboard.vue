@@ -31,12 +31,6 @@ const yellowB = ref(0); const redB = ref(0)
 
 const alertMsg = ref(''); let alertTimer: any = null
 
-// TTS
-let ttsReady = false
-if (typeof speechSynthesis !== 'undefined') {
-  speechSynthesis.onvoiceschanged = () => { ttsReady = true }
-  speechSynthesis.getVoices()
-}
 // Beep fallback (always works)
 let audioCtx: AudioContext | null = null
 function beep(freq: number, duration: number, count = 1) {
@@ -57,24 +51,16 @@ function beep(freq: number, duration: number, count = 1) {
   } catch(e) {}
 }
 
-function speak(text: string) {
-  try {
-    if (!ttsReady) { speechSynthesis?.getVoices(); ttsReady = true }
-    speechSynthesis?.cancel()
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'zh-CN'; u.rate = 0.8; u.volume = 1
-    speechSynthesis?.speak(u)
-  } catch (e) {}
-  // Always beep as guaranteed audible alert
-  if (text.includes('发球')) beep(880, 200, 1)
-  else if (text.includes('暂停')) beep(440, 300, 3)
-  else if (text.includes('擦网')) beep(600, 150, 2)
-  else if (text.includes('黄牌')) beep(500, 100, 2)
-  else if (text.includes('红牌')) beep(300, 200, 3)
+function alertBeep(msg: string) {
+  if (msg.includes('发球')) beep(880, 200, 1)
+  else if (msg.includes('暂停')) beep(440, 250, 3)
+  else if (msg.includes('擦网')) beep(660, 150, 2)
+  else if (msg.includes('黄牌')) beep(520, 100, 2)
+  else if (msg.includes('红牌')) beep(330, 200, 3)
   else beep(1000, 150, 1)
 }
 function showAlert(msg: string, ms = 1500) {
-  clearTimeout(alertTimer); alertMsg.value = msg; speak(msg)
+  clearTimeout(alertTimer); alertMsg.value = msg; alertBeep(msg)
   if (ms > 0) alertTimer = setTimeout(() => { alertMsg.value = '' }, ms)
 }
 
@@ -102,11 +88,6 @@ async function startMatch() {
     o.connect(g); g.connect(audioCtx.destination)
     o.frequency.value = 880; g.gain.value = 0.01
     o.start(); o.stop(audioCtx.currentTime + 0.01)
-  } catch(e) {}
-  try {
-    speechSynthesis?.cancel()
-    const test = new SpeechSynthesisUtterance('')
-    test.volume = 0; speechSynthesis?.speak(test)
   } catch(e) {}
   await nextTick(); enterFullscreen()
 }
