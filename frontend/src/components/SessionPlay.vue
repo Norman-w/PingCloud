@@ -104,10 +104,10 @@ const emit = defineEmits<{
     <ScoreDialog :show="showEditDialog" :player-a-id="scoringMatch?.player_a_id||0" :player-b-id="scoringMatch?.player_b_id||0"
       :player-a-name="scoringMatch?.player_a_name||''" :player-b-name="scoringMatch?.player_b_name||''"
       :initial-score-a="scoringMatch?.played?scoringMatch.score_a:undefined" :initial-score-b="scoringMatch?.played?scoringMatch.score_b:undefined"
-      @update:show="emit('update:showEditDialog', $event)" @submit="emit('submitScore', $event[0], $event[1])" @forfeit="emit('forfeit', $event)" />
+      @update:show="emit('update:showEditDialog', $event)" @submit="(a:number,b:number) => emit('submitScore', a, b)" @forfeit="emit('forfeit', $event)" />
 
     <AddPlayerDialog :show="showAddPlayerDialog" :players="players"
       :exclude-ids="session.players.map(p=>p.id)" :session-name="session.name"
-      @update:show="emit('update:showAddPlayerDialog', $event)" @add="emit('addPlayer')" />
+      @update:show="emit('update:showAddPlayerDialog', $event)" @add="(pid:number) => { emit('update:addPlayerId', pid); emit('addPlayer') }" />
   </div>
 </template>
