@@ -12,6 +12,7 @@ const routes = [
   { path: '/record', name: 'RecordMatch', component: () => import('./views/RecordMatch.vue') },
   { path: '/player/:id', name: 'PlayerDetail', component: () => import('./views/PlayerDetail.vue') },
   { path: '/rules', name: 'Rules', component: () => import('./views/Rules.vue') },
+  { path: '/scoreboard', name: 'Scoreboard', component: () => import('./views/Scoreboard.vue') },
 ]
 
 const router = createRouter({

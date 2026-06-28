@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { IconTournament, IconPlus, IconList, IconUsers, IconClipboardCheck, IconChartBar, IconTrophy, IconChevronRight } from '@tabler/icons-vue'
 import ScoreDialog from '../components/ScoreDialog.vue'
@@ -30,6 +31,7 @@ const editingName = ref(false)
 const editName = ref('')
 const showAddPlayerDialog = ref(false)
 const addPlayerId = ref(0)
+const route = useRoute()
 
 async function startEditName() {
   if (!currentSession.value) return
@@ -63,7 +65,10 @@ async function addPlayerToSession() {
   } catch (e: any) { showToast('添加失败') }
 }
 
-onMounted(async () => { await loadAll() })
+onMounted(async () => {
+  await loadAll()
+  if (route.query.new === '1') enterSelect()
+})
 
 async function loadAll() {
   loadingPlayers.value = true
@@ -170,6 +175,16 @@ async function viewSession(session: SessionDetail) {
 
 function backToList() { step.value = 'list'; currentSession.value = null; loadAll() }
 function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) }
+function playerIndex(pid: number): number {
+  if (!currentSession.value) return pid
+  const idx = currentSession.value.players.findIndex(p => p.id === pid)
+  return idx >= 0 ? idx + 1 : pid
+}
+function matchIndex(mid: number): number {
+  if (!currentSession.value) return mid
+  const idx = currentSession.value.matches.findIndex(m => m.id === mid)
+  return idx >= 0 ? idx + 1 : mid
+}
 </script>
 
 <template>
@@ -252,7 +267,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
             <input type="checkbox" :checked="selectedIDs.has(p.id)" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #1989fa;" />
             <div style="flex: 1;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }}</div>
-              <div style="font-size: 13px; color: #969799;">{{ sessionDisplayRating(p, currentSession!.matches) }} 分</div>
+              <div style="font-size: 13px; color: #969799;">{{ sessionDisplayRating(p, currentSession?.matches) }} 分</div>
             </div>
           </div>
           <div @click="showAdd = true" style="display: flex; align-items: center; justify-content: center; padding: 14px; color: #1989fa; font-weight: 500; cursor: pointer;">
@@ -301,7 +316,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
           <div style="font-weight: 600; margin-bottom: 12px; font-size: 16px;">{{ sessionName }}</div>
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">
             <span v-for="p in myPlayers()" :key="p.id" style="font-size: 14px; padding: 6px 12px; background: #e8f4ff; color: #1989fa; border-radius: 8px; font-weight: 500;">
-              {{ p.name }} ({{ sessionDisplayRating(p, currentSession!.matches) }})
+              {{ p.name }} ({{ sessionDisplayRating(p, currentSession?.matches) }})
             </span>
           </div>
           <div style="margin-top: 12px; font-size: 13px; color: #969799;">将自动生成循环赛对阵表（每人互相打一场）</div>
@@ -349,10 +364,10 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               {{ i + 1 }}
             </div>
             <div style="flex: 1; margin-left: 12px;">
-              <div style="font-size: 16px; font-weight: 500;">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ p.id }}</span></div>
+              <div style="font-size: 16px; font-weight: 500;">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ i + 1 }}</span></div>
               <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负 <template v-if="p.forfeits">· 弃权{{ p.forfeits }}</template></div>
             </div>
-            <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession!.matches) }}</div>
+            <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession?.matches) }}</div>
           </div>
         </div>
 
@@ -365,9 +380,9 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
           <div v-for="m in currentSession.matches" :key="m.id"
             @click="openScoreEditor(m)"
             style="display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid #f5f5f5; cursor: pointer;">
-            <span style="width:32px;font-size:12px;color:#c8c9cc;flex-shrink:0;">#{{ m.id }}</span>
+            <span style="width:32px;font-size:12px;color:#c8c9cc;flex-shrink:0;">#{{ matchIndex(m.id) }}</span>
             <div style="flex: 1; text-align: right; font-weight: 400;" :style="{ fontWeight: m.winner_id === m.player_a_id ? 700 : 400 }">
-              <span style="font-size:10px;color:#c8c9cc;">{{ m.player_a_id }}号</span> {{ m.player_a_name }}
+              <span style="font-size:10px;color:#c8c9cc;">{{ playerIndex(m.player_a_id) }}号</span> {{ m.player_a_name }}
               <span v-if="m.played" style="font-size: 11px; display: block;" :style="{ color: m.rating_change_a >= 0 ? '#07c160' : '#ee0a24' }">{{ m.rating_change_a >= 0 ? '+' : '' }}{{ m.rating_change_a }}</span>
             </div>
             <div style="width: 64px; text-align: center; font-weight: 700; font-size: 16px;">
@@ -376,7 +391,7 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               <template v-else><span style="color: #c8c9cc; font-size: 13px;">待录入</span></template>
             </div>
             <div style="flex: 1; font-weight: 400;" :style="{ fontWeight: m.winner_id === m.player_b_id ? 700 : 400 }">
-              <span style="font-size:10px;color:#c8c9cc;">{{ m.player_b_id }}号</span> {{ m.player_b_name }}
+              <span style="font-size:10px;color:#c8c9cc;">{{ playerIndex(m.player_b_id) }}号</span> {{ m.player_b_name }}
               <span v-if="m.played" style="font-size: 11px; display: block;" :style="{ color: m.rating_change_b >= 0 ? '#07c160' : '#ee0a24' }">{{ m.rating_change_b >= 0 ? '+' : '' }}{{ m.rating_change_b }}</span>
             </div>
             </div>
@@ -389,9 +404,9 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
           </button>
         </div>
         <div style="padding: 16px; display: flex; gap: 12px;">
-          <button @click="completeSession" :disabled="currentSession!.matches.some(m => !m.played)"
+          <button @click="completeSession" :disabled="(currentSession?.matches?.some(m => !m.played) ?? true)"
             style="flex: 1; padding: 16px; background: #1989fa; color: #fff; border: none; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer;"
-            :style="{ opacity: currentSession!.matches.some(m => !m.played) ? 0.5 : 1, cursor: currentSession!.matches.some(m => !m.played) ? 'not-allowed' : 'pointer' }">
+            :style="{ opacity: (currentSession?.matches?.some(m => !m.played) ?? true) ? 0.5 : 1, cursor: (currentSession?.matches?.some(m => !m.played) ?? true) ? 'not-allowed' : 'pointer' }">
             结束活动 · 查看排名
           </button>
           <button @click="backToList" style="padding: 16px 24px; background: #f5f5f5; border: none; border-radius: 24px; font-size: 16px; cursor: pointer; color: #666;">返回</button>
@@ -425,11 +440,11 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
               {{ i + 1 }}
             </div>
             <div style="flex: 1; margin-left: 12px;">
-              <div style="font-size: 16px; font-weight: 500;" :style="{ fontSize: i < 3 ? '18px' : '16px', fontWeight: i < 3 ? 700 : 500 }">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ p.id }}</span></div>
+              <div style="font-size: 16px; font-weight: 500;" :style="{ fontSize: i < 3 ? '18px' : '16px', fontWeight: i < 3 ? 700 : 500 }">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ i + 1 }}</span></div>
               <div style="font-size: 12px; color: #969799;">{{ p.wins }}胜 {{ p.losses }}负 <template v-if="p.forfeits">· 弃权{{ p.forfeits }}</template></div>
             </div>
             <div style="text-align: right;">
-              <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession!.matches) }}</div>
+              <div style="font-size: 18px; font-weight: 700; color: #1989fa;">{{ sessionDisplayRating(p, currentSession?.matches) }}</div>
               <div style="font-size: 11px;">
                 <span style="color: #969799;">{{ p.starting_rating }}</span>
                 <span :style="{ color: sessionChange(currentSession!.matches, p.id) >= 0 ? '#07c160' : '#ee0a24', fontWeight: 600 }">
@@ -447,14 +462,14 @@ function myPlayers() { return selectedPlayers(players.value, selectedIDs.value) 
         <div style="background: #fff; border-radius: 12px; margin: 4px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden;">
           <div v-for="m in currentSession.matches" :key="m.id"
             style="display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid #f5f5f5;">
-            <span style="width:32px;font-size:12px;color:#c8c9cc;flex-shrink:0;">#{{ m.id }}</span>
+            <span style="width:32px;font-size:12px;color:#c8c9cc;flex-shrink:0;">#{{ matchIndex(m.id) }}</span>
             <div style="flex: 1; text-align: right; font-weight: 400;" :style="{ fontWeight: m.winner_id === m.player_a_id ? 700 : 400 }">
-              <span style="font-size:10px;color:#c8c9cc;">{{ m.player_a_id }}号</span> {{ m.player_a_name }}
+              <span style="font-size:10px;color:#c8c9cc;">{{ playerIndex(m.player_a_id) }}号</span> {{ m.player_a_name }}
               <span style="font-size:10px;display:block;" :style="{ color: m.rating_change_a >= 0 ? '#07c160' : '#ee0a24' }">{{ changeSign(m.rating_change_a) }}{{ m.rating_change_a }}</span>
             </div>
             <div style="width: 64px; text-align: center; font-weight: 700; font-size: 16px;"><template v-if="m.forfeit"><span style="color:#ff976a;font-weight:600;">弃权</span></template><template v-else>{{ m.score_a }} : {{ m.score_b }}</template></div>
             <div style="flex: 1; font-weight: 400;" :style="{ fontWeight: m.winner_id === m.player_b_id ? 700 : 400 }">
-              <span style="font-size:10px;color:#c8c9cc;">{{ m.player_b_id }}号</span> {{ m.player_b_name }}
+              <span style="font-size:10px;color:#c8c9cc;">{{ playerIndex(m.player_b_id) }}号</span> {{ m.player_b_name }}
               <span style="font-size:10px;display:block;" :style="{ color: m.rating_change_b >= 0 ? '#07c160' : '#ee0a24' }">{{ changeSign(m.rating_change_b) }}{{ m.rating_change_b }}</span>
             </div>
           </div>

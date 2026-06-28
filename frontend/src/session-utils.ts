@@ -23,7 +23,8 @@ export function unplayedCount(s: SessionDetail) {
   return s.matches?.filter(m => !m.played).length || 0
 }
 
-export function sessionChange(matches: SessionMatch[], pid: number): number {
+export function sessionChange(matches: SessionMatch[] | null | undefined, pid: number): number {
+  if (!matches) return 0
   let total = 0
   for (const m of matches) {
     if (!m.played) continue
@@ -33,7 +34,7 @@ export function sessionChange(matches: SessionMatch[], pid: number): number {
   return total
 }
 
-export function sessionDisplayRating(p: SessionPlayer, matches: SessionMatch[]): number {
+export function sessionDisplayRating(p: SessionPlayer, matches: SessionMatch[] | null | undefined): number {
   return p.starting_rating + sessionChange(matches, p.id)
 }
 

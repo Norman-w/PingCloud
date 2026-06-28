@@ -71,13 +71,17 @@ function winRate(p: RankingEntry) {
     </div>
 
     <div class="quick-actions">
-      <button class="quick-action qa-match" @click="router.push({ name: 'SessionView' })">
+      <button class="quick-action qa-match" @click="router.push({ name: 'SessionView', query: { new: '1' } })">
         <IconSwords :size="28" :stroke-width="2" />
         <span>快速记分</span>
       </button>
       <button class="quick-action qa-player" @click="router.push({ name: 'AddPlayer' })">
         <IconUserPlus :size="28" :stroke-width="2" />
         <span>添加球员</span>
+      </button>
+      <button class="quick-action" style="background: linear-gradient(135deg, #0a0a2e, #1a1a4e);" @click="router.push({ name: 'Scoreboard' })">
+        <span class="qa-icon" style="font-size: 28px;">📊</span>
+        <span>记分牌</span>
       </button>
     </div>
 
