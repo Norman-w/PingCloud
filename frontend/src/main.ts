@@ -13,6 +13,7 @@ const routes = [
   { path: '/player/:id', name: 'PlayerDetail', component: () => import('./views/PlayerDetail.vue') },
   { path: '/rules', name: 'Rules', component: () => import('./views/Rules.vue') },
   { path: '/bulletin', name: 'Bulletin', component: () => import('./views/Bulletin.vue') },
+  { path: '/headtohead', name: 'HeadToHead', component: () => import('./views/HeadToHead.vue') },
   { path: '/scoreboard', name: 'Scoreboard', component: () => import('./views/Scoreboard.vue') },
 ]
 
