@@ -47,17 +47,22 @@ function setActive(idx: number) {
     g.dots.forEach(d => {
       const sm = d.material as THREE.SpriteMaterial
       sm.opacity = active ? 0.9 : 0.05
-      // Update text and color
       const ch = mode === 'dominate' ? '克' : '福'
-      if (d.userData.char !== ch) {
-        d.userData.char = ch
-        const canvas = d.userData.canvas
-        const ctx = canvas.getContext('2d')!
+      // Update text
+      if (d.userData.char !== ch || d.userData.lastColor !== color.getHexString()) {
+        d.userData.char = ch; d.userData.lastColor = color.getHexString()
+        const canvas = d.userData.canvas; const ctx = canvas.getContext('2d')!
         ctx.clearRect(0, 0, 64, 64)
         ctx.fillStyle = '#' + color.getHexString()
-        ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText(ch, 32, 32)
         d.userData.tex.needsUpdate = true
+      }
+      // Reverse direction for feed mode (福送出去: loser→winner)
+      if (mode === 'feed') {
+        d.userData.fromW = false // flow from loser to winner
+      } else {
+        d.userData.fromW = true // flow from winner to loser
       }
     })
   })
@@ -189,18 +194,21 @@ async function init() {
 
       const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
       const lineGeo = new THREE.BufferGeometry().setFromPoints([wPos, lPos])
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x332222, transparent: true, opacity: 0.1, depthTest: false })
+      const hsl = { h: 0, s: 0.9, l: 0.08 }
+      const initColor = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+      const lineMat = new THREE.LineBasicMaterial({ color: initColor, transparent: true, opacity: 0.08, depthTest: false })
       const line = new THREE.Line(lineGeo, lineMat)
       scene.add(line)
 
       const dots: THREE.Sprite[] = []
       for (let k = 0; k < 2; k++) {
         const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64
-        const ctx = canvas.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('克', 32, 32)
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#' + initColor.getHexString(); ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('克', 32, 32)
         const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter
-        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.1, depthTest: false })
-        const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.6, 0.6, 1)
-        sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: '克' }
+        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.08, depthTest: false })
+        const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.4, 0.4, 1)
+        sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.006 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: '克' }
         scene.add(sprite)
         dots.push(sprite)
       }
@@ -259,7 +267,8 @@ async function init() {
       if (c.userData?.lineGrp) {
         c.userData.t += c.userData.speed
         if (c.userData.t > 1) c.userData.t -= 1
-        c.position.lerpVectors(c.userData.a, c.userData.b, c.userData.t)
+        if (c.userData.fromW !== false) { c.position.lerpVectors(c.userData.a, c.userData.b, c.userData.t) }
+        else { c.position.lerpVectors(c.userData.b, c.userData.a, c.userData.t) }
       }
     })
 
