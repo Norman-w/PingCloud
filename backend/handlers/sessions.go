@@ -445,6 +445,14 @@ func CompleteSession(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(path, "/")
 	sessionID, _ := strconv.Atoi(parts[0])
 
+	// Guard: only apply once
+	var currentStatus string
+	db.DB.QueryRow("SELECT status FROM sessions WHERE id=$1", sessionID).Scan(&currentStatus)
+	if currentStatus == "completed" {
+		writeJSON(w, map[string]string{"status": "already_completed"})
+		return
+	}
+
 	// Apply all match rating changes to current_rating
 	_, err := db.DB.Exec(`
 		UPDATE players p SET current_rating = p.current_rating + (
