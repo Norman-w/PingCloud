@@ -2,8 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { IconPingPong, IconSwords, IconUserPlus, IconTrophy, IconScoreboard } from '@tabler/icons-vue'
+import { IconPingPong, IconSwords, IconUserPlus, IconTrophy, IconScoreboard, IconSpeakerphone } from '@tabler/icons-vue'
 import { api, type RankingEntry } from '../api'
+import { unreadCount } from '../bulletins'
 
 const router = useRouter()
 const rankings = ref<RankingEntry[]>([])
@@ -52,7 +53,13 @@ function winRate(p: RankingEntry) {
         <IconPingPong :size="28" :stroke-width="2" style="vertical-align: -5px; margin-right: 4px;" />
         乒云
       </div>
-      <div class="hero-sub">乒乓球积分排名系统</div>
+      <div class="hero-sub" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>乒乓球积分排名系统</span>
+        <span @click="router.push({name:'Bulletin'})" style="cursor:pointer;position:relative;font-size:12px;background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:10px;">
+          <IconSpeakerphone :size="14" :stroke-width="2" style="vertical-align:-2px;margin-right:4px;" />公告
+          <span v-if="unreadCount()>0" style="position:absolute;top:-6px;right:-6px;background:#ee0a24;color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{unreadCount()}}</span>
+        </span>
+      </div>
     </div>
 
     <div class="stats-row">
