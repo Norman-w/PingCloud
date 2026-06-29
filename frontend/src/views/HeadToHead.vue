@@ -77,10 +77,10 @@ async function init() {
   light.position.set(0, 10, 10)
   scene.add(light)
 
-  // Grid ring
-  const ring = new THREE.RingGeometry(6, 6.1, 64)
-  const ringMat = new THREE.MeshBasicMaterial({ color: 0x1a2a4a, side: THREE.DoubleSide })
-  scene.add(new THREE.Mesh(ring, ringMat))
+  // Wireframe sphere
+  const wireGeo = new THREE.SphereGeometry(radius, 32, 16)
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0x1a2a4a, wireframe: true, transparent: true, opacity: 0.3 })
+  scene.add(new THREE.Mesh(wireGeo, wireMat))
 
   // Fibonacci sphere: evenly distribute points on sphere surface
   const n = players.length
@@ -89,10 +89,11 @@ async function init() {
   const phi = Math.PI * (3 - Math.sqrt(5)) // golden angle
 
   players.forEach((p, i) => {
-    const y = 1 - (i / (n - 1 || 1)) * 2 // -1 to 1
-    const r = Math.sqrt(1 - y * y)
+    const yn = 1 - (i / (n - 1 || 1)) * 2 // -1 to 1
+    const r = Math.sqrt(1 - yn * yn)
     const theta = phi * i
     const x = Math.cos(theta) * r * radius
+    const y = yn * radius
     const z = Math.sin(theta) * r * radius
     const pos = new THREE.Vector3(x, y, z)
     playerObjs.push({ pos, id: p.id, name: p.name })
