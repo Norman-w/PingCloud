@@ -15,10 +15,12 @@ let animId: number
 let camDist = 20, rotY = 0, rotX = 0.4
 let autoRotate = true, isDragging = false, prevX = 0, prevY = 0
 let spheres: THREE.Mesh[] = []
-let lineGroups: { mesh: THREE.Line | THREE.Mesh; dots: THREE.Mesh[]; winnerIdx: number; loserIdx: number; intensity: number }[] = []
+let lineGroups: { line: THREE.Line; dots: THREE.Mesh[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
 let activeIdx = 0
+let mode: 'dominate' | 'feed' = 'dominate'
 let cycleTimer: any = null
 let clickTimeout: any = null
+let cycleCount = 0
 const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
 const labelDivs: HTMLDivElement[] = []
 let radius = 5
@@ -27,15 +29,24 @@ function setActive(idx: number) {
   activeIdx = idx
 
   lineGroups.forEach(g => {
-    const active = g.winnerIdx === idx // only show lines where this player dominates
-    const i = active ? g.intensity : 0.08
-    if (g.mesh instanceof THREE.Mesh) {
-      (g.mesh.material as THREE.MeshBasicMaterial).opacity = i
+    let active = false
+    if (mode === 'dominate') {
+      active = g.winnerIdx === idx // I dominate this opponent
     } else {
-      (g.mesh.material as THREE.LineBasicMaterial).opacity = active ? 0.5 + g.intensity * 0.5 : 0.06
+      active = g.loserIdx === idx // someone dominates me (I'm the 福星 for them)
     }
+
+    const alpha = active ? 0.5 + g.intensity * 0.5 : 0.06
+    const hsl = mode === 'dominate' ? { h: 0, s: 0.9, l: alpha } : { h: 0.33, s: 0.8, l: alpha }
+    const color = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+    const mat = g.line.material as THREE.LineBasicMaterial
+    mat.color = color
+    mat.opacity = alpha
+
     g.dots.forEach(d => {
-      (d.material as THREE.MeshBasicMaterial).opacity = active ? 0.9 : 0.05
+      const dm = d.material as THREE.MeshBasicMaterial
+      dm.color = new THREE.Color().setHSL(hsl.h, 1, 0.55)
+      dm.opacity = active ? 0.9 : 0.05
     })
   })
 
@@ -59,8 +70,18 @@ function startCycle() {
   clearInterval(cycleTimer)
   cycleTimer = setInterval(() => {
     activeIdx = (activeIdx + 1) % playerObjs.length
+    if (activeIdx === 0) {
+      cycleCount++
+      if (cycleCount % 2 === 0) {
+        mode = mode === 'dominate' ? 'feed' : 'dominate'
+      }
+    }
     setActive(activeIdx)
-  }, 4000)
+  }, 2000)
+}
+
+function setMode(m: 'dominate' | 'feed') {
+  mode = m; setActive(activeIdx)
 }
 
 async function init() {
@@ -150,12 +171,11 @@ async function init() {
 
       const wIdx = winRate > 0.5 ? i : j
       const lIdx = winRate > 0.5 ? j : i
-      const winnerPos = playerObjs[wIdx].pos.clone()
-      const loserPos = playerObjs[lIdx].pos.clone()
+      const wPos = playerObjs[wIdx].pos.clone()
+      const lPos = playerObjs[lIdx].pos.clone()
 
       const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
-      const color = new THREE.Color().setHSL(0, 0.9, intensity * 0.45 + 0.2)
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([winnerPos, loserPos])
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([wPos, lPos])
       const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.1, depthTest: false })
       const line = new THREE.Line(lineGeo, lineMat)
       scene.add(line)
@@ -165,11 +185,11 @@ async function init() {
       const dotM = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0, 1, 0.55), transparent: true, opacity: 0.1 })
       for (let k = 0; k < 2; k++) {
         const dot = new THREE.Mesh(dotG, dotM.clone())
-        dot.userData = { a: winnerPos.clone(), b: loserPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004, lineGrp: true }
+        dot.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004, lineGrp: true }
         scene.add(dot)
         dots.push(dot)
       }
-      lineGroups.push({ mesh: line, dots, winnerIdx: wIdx, loserIdx: lIdx, intensity })
+      lineGroups.push({ line, dots, winnerIdx: wIdx, loserIdx: lIdx, winnerPos: wPos.clone(), loserPos: lPos.clone(), intensity })
     })
   })
 
@@ -259,10 +279,13 @@ onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); cle
     <div style="position:absolute;top:0;left:0;right:0;z-index:10;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
       <button @click="router.back()" style="background:rgba(0,0,0,0.5);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
       <span style="color:#fff;font-weight:600;">相生相克 · 3D</span>
-      <span style="font-size:11px;color:#666;">拖拽旋转 · 滚轮缩放 · 点击球员锁定</span>
+      <span style="font-size:11px;color:#666;">点击球员锁定</span>
     </div>
-    <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;color:#aaa;background:rgba(0,0,0,0.5);padding:6px 14px;border-radius:12px;">
-      自动轮播中 · 点击球员锁定视角
+    <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:0;background:rgba(0,0,0,0.5);border-radius:12px;overflow:hidden;">
+      <button @click="setMode('dominate')" style="padding:8px 20px;border:none;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:transparent;border-bottom:2px solid;"
+        :style="mode==='dominate'?{borderColor:'#e74c3c',color:'#e74c3c'}:{borderColor:'transparent',color:'#666'}">相克</button>
+      <button @click="setMode('feed')" style="padding:8px 20px;border:none;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:transparent;border-bottom:2px solid;"
+        :style="mode==='feed'?{borderColor:'#07c160',color:'#07c160'}:{borderColor:'transparent',color:'#666'}">福星</button>
     </div>
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;z-index:5;">加载中...</div>
     <div v-if="error" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e74c3c;z-index:5;">{{ error }}</div>
