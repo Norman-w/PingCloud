@@ -82,16 +82,18 @@ async function init() {
   const ringMat = new THREE.MeshBasicMaterial({ color: 0x1a2a4a, side: THREE.DoubleSide })
   scene.add(new THREE.Mesh(ring, ringMat))
 
-  // Position players on a circle
+  // Fibonacci sphere: evenly distribute points on sphere surface
   const n = players.length
   const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
   const radius = 6
+  const phi = Math.PI * (3 - Math.sqrt(5)) // golden angle
 
   players.forEach((p, i) => {
-    const angle = (i / n) * Math.PI * 2 - Math.PI / 2
-    const x = Math.cos(angle) * radius
-    const z = Math.sin(angle) * radius
-    const y = 0
+    const y = 1 - (i / (n - 1 || 1)) * 2 // -1 to 1
+    const r = Math.sqrt(1 - y * y)
+    const theta = phi * i
+    const x = Math.cos(theta) * r * radius
+    const z = Math.sin(theta) * r * radius
     const pos = new THREE.Vector3(x, y, z)
     playerObjs.push({ pos, id: p.id, name: p.name })
 
