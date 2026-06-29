@@ -22,3 +22,4 @@ Thumbs.db
 # Deploy config (contains local paths/IPs)
 /etc/nginx/sites-enabled/pingpong.conf
 /etc/systemd/system/pingpong.service
+node_modules/
