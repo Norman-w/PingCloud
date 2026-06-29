@@ -8,33 +8,78 @@ const container = ref<HTMLElement>()
 const loading = ref(true)
 const error = ref('')
 
-interface H2HRecord { opponent_id: number; opponent_name: string; wins: number; losses: number }
-interface H2HPlayer { id: number; name: string; records: H2HRecord[] }
+interface H2HPlayer { id: number; name: string; records: { opponent_id: number; opponent_name: string; wins: number; losses: number }[] }
 
-let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer
+let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, raycaster: THREE.Raycaster
 let animId: number
-let autoRotate = true
-let isDragging = false, prevX = 0, prevY = 0
-let camDist = 14
-let rotY = 0, rotX = 0.4
+let camDist = 20, rotY = 0, rotX = 0.4
+let autoRotate = true, isDragging = false, prevX = 0, prevY = 0
+let spheres: THREE.Mesh[] = []
+let lineGroups: { mesh: THREE.Line | THREE.Mesh; dots: THREE.Mesh[]; playerI: number; opponentJ: number; intensity: number }[] = []
+let activeIdx = 0
+let cycleTimer: any = null
+let clickTimeout: any = null
+const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
+const labelDivs: HTMLDivElement[] = []
+let radius = 6
+
+function setActive(idx: number) {
+  activeIdx = idx
+  const activeId = playerObjs[idx]?.id
+
+  lineGroups.forEach(g => {
+    const active = g.playerI === idx || g.opponentJ === idx
+    const i = active ? g.intensity : 0.15
+    if (g.mesh instanceof THREE.Mesh) {
+      (g.mesh.material as THREE.MeshBasicMaterial).opacity = i
+    } else {
+      (g.mesh.material as THREE.LineBasicMaterial).opacity = active ? 0.6 + g.intensity * 0.4 : 0.1
+    }
+    // Dim non-active dots
+    g.dots.forEach(d => {
+      (d.material as THREE.MeshBasicMaterial).opacity = active ? 0.9 : 0.1
+    })
+  })
+
+  // Highlight active sphere
+  spheres.forEach((s, i) => {
+    const m = s.material as THREE.MeshStandardMaterial
+    m.emissiveIntensity = i === idx ? 1.5 : 0.3
+    m.emissive = new THREE.Color(i === idx ? 0x44aaff : 0x112244)
+  })
+}
+
+function onPlayerClick(idx: number) {
+  clearTimeout(clickTimeout)
+  clearInterval(cycleTimer)
+  setActive(idx)
+  autoRotate = false
+  clickTimeout = setTimeout(() => { autoRotate = true; startCycle() }, 8000)
+}
+
+function startCycle() {
+  clearInterval(cycleTimer)
+  cycleTimer = setInterval(() => {
+    activeIdx = (activeIdx + 1) % playerObjs.length
+    setActive(activeIdx)
+  }, 4000)
+}
 
 async function init() {
   let players: H2HPlayer[]
-  try {
-    players = await fetch('/api/headtohead').then(r => r.json())
-  } catch(e: any) { error.value = '加载失败'; loading.value = false; return }
+  try { players = await fetch('/api/headtohead').then(r => r.json()) }
+  catch (e: any) { error.value = '加载失败'; loading.value = false; return }
   loading.value = false
   if (!container.value || players.length === 0) { error.value = '暂无球员'; return }
 
   const W = container.value.clientWidth; const H = container.value.clientHeight
-  const radius = 6
 
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x0a0a1a)
-  scene.fog = new THREE.Fog(0x0a0a1a, 10, 40)
+  scene.fog = new THREE.Fog(0x0a0a1a, 15, 50)
 
-  camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100)
-  camera.position.set(0, 3, 18)
+  camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100)
+  camera.position.set(0, 2, camDist)
   camera.lookAt(0, 0, 0)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -42,23 +87,21 @@ async function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   container.value.appendChild(renderer.domElement)
 
-  // Lights
+  raycaster = new THREE.Raycaster()
+
   scene.add(new THREE.AmbientLight(0x404060, 3))
-  const light = new THREE.PointLight(0xffffff, 4, 30)
+  const light = new THREE.PointLight(0xffffff, 4, 40)
   light.position.set(5, 8, 8)
   scene.add(light)
 
   // Wireframe sphere
-  const wireGeo = new THREE.SphereGeometry(radius, 24, 12)
-  const wireMat = new THREE.MeshBasicMaterial({ color: 0x1a2a4a, wireframe: true, transparent: true, opacity: 0.3 })
+  const wireGeo = new THREE.SphereGeometry(radius, 20, 10)
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0x1a3050, wireframe: true, transparent: true, opacity: 0.25 })
   scene.add(new THREE.Mesh(wireGeo, wireMat))
 
   // Fibonacci sphere distribution
   const n = players.length
-  const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
   const phi = Math.PI * (3 - Math.sqrt(5))
-
-  const labelDivs: HTMLDivElement[] = []
 
   players.forEach((p, i) => {
     const yn = 1 - (i / (n - 1 || 1)) * 2
@@ -70,87 +113,130 @@ async function init() {
     const pos = new THREE.Vector3(x, y, z)
     playerObjs.push({ pos, id: p.id, name: p.name })
 
-    // Player sphere
-    const geo = new THREE.SphereGeometry(0.28, 32, 32)
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1989fa, roughness: 0.3, metalness: 0.6, emissive: 0x112244, emissiveIntensity: 0.5 })
-    const sphere = new THREE.Mesh(geo, mat); sphere.position.copy(pos)
-    sphere.userData = { name: p.name, pos: pos.clone() }
+    const geo = new THREE.SphereGeometry(0.3, 32, 32)
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1989fa, roughness: 0.3, metalness: 0.6, emissive: 0x112244, emissiveIntensity: 0.3 })
+    const sphere = new THREE.Mesh(geo, mat)
+    sphere.position.copy(pos)
+    sphere.userData = { idx: i }
     scene.add(sphere)
+    spheres.push(sphere)
 
     // Glow
-    const glowG = new THREE.SphereGeometry(0.38, 32, 32)
-    const glowM = new THREE.MeshBasicMaterial({ color: 0x1989fa, transparent: true, opacity: 0.2 })
-    const glow = new THREE.Mesh(glowG, glowM); glow.position.copy(pos); scene.add(glow)
+    const glowG = new THREE.SphereGeometry(0.4, 32, 32)
+    const glowM = new THREE.MeshBasicMaterial({ color: 0x1989fa, transparent: true, opacity: 0.15 })
+    const glow = new THREE.Mesh(glowG, glowM)
+    glow.position.copy(pos)
+    scene.add(glow)
 
-    // HTML label
+    // Label
     const div = document.createElement('div')
     div.textContent = p.name
-    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 8px #1989fa;pointer-events:none;transform:translate(-50%,-50%);'
+    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 8px #1989fa;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap;'
     container.value!.appendChild(div)
     labelDivs.push(div)
   })
 
-  // Only show dominant lines (one per pair, winner→loser)
+  // Straight lines: one per pair
   const drawn = new Set<string>()
   players.forEach((p, i) => {
     p.records.forEach(r => {
       const j = playerObjs.findIndex(po => po.id === r.opponent_id)
       if (j < 0 || r.wins + r.losses === 0) return
-      const key = [i, j].sort().join('-'); if (drawn.has(key)) return; drawn.add(key)
+      const key = [i, j].sort().join('-')
+      if (drawn.has(key)) return
+      drawn.add(key)
 
-      const total = r.wins + r.losses; const winRate = r.wins / total
+      const total = r.wins + r.losses
+      const winRate = r.wins / total
       if (Math.abs(winRate - 0.5) < 0.01) return
 
       const winnerPos = (winRate > 0.5 ? playerObjs[i].pos : playerObjs[j].pos).clone()
       const loserPos = (winRate > 0.5 ? playerObjs[j].pos : playerObjs[i].pos).clone()
 
-      // Straight line from winner to loser (piercing through the sphere)
       const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
       const color = new THREE.Color().setHSL(0, 0.9, intensity * 0.45 + 0.2)
       const lineGeo = new THREE.BufferGeometry().setFromPoints([winnerPos, loserPos])
-      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 + Math.abs(winRate - 0.5) * 0.5, depthTest: false })
-      scene.add(new THREE.Line(lineGeo, lineMat))
+      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.1, depthTest: false })
+      const line = new THREE.Line(lineGeo, lineMat)
+      scene.add(line)
 
-      // Flow dots along straight line
+      const dots: THREE.Mesh[] = []
       const dotG = new THREE.SphereGeometry(0.08, 8, 8)
-      const dotM = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0, 1, 0.55) })
+      const dotM = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0, 1, 0.55), transparent: true, opacity: 0.1 })
       for (let k = 0; k < 2; k++) {
-        const dot = new THREE.Mesh(dotG, dotM)
-        dot.userData = { a: winnerPos.clone(), b: loserPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004 }
+        const dot = new THREE.Mesh(dotG, dotM.clone())
+        dot.userData = { a: winnerPos.clone(), b: loserPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004, lineGrp: true }
         scene.add(dot)
+        dots.push(dot)
       }
+      lineGroups.push({ mesh: line, dots, playerI: i, opponentJ: j, intensity })
     })
   })
 
-  // Mouse/touch controls (prevent page scroll)
-  container.value.addEventListener('pointerdown', (e: PointerEvent) => { e.preventDefault(); isDragging = true; prevX = e.clientX; prevY = e.clientY; autoRotate = false })
+  // Highlight first player
+  setActive(0)
+  startCycle()
+
+  // Controls
+  container.value.addEventListener('pointerdown', (e: PointerEvent) => {
+    e.preventDefault(); isDragging = true; prevX = e.clientX; prevY = e.clientY; autoRotate = false
+  })
   window.addEventListener('pointermove', (e: PointerEvent) => {
-    if (!isDragging) return; rotY -= (e.clientX - prevX) * 0.005; rotX += (e.clientY - prevY) * 0.005
+    if (!isDragging) return
+    rotY -= (e.clientX - prevX) * 0.005; rotX += (e.clientY - prevY) * 0.005
     rotX = Math.max(-1.4, Math.min(1.4, rotX)); prevX = e.clientX; prevY = e.clientY
   })
-  window.addEventListener('pointerup', () => { isDragging = false; setTimeout(() => { if (!isDragging) autoRotate = true }, 2000) })
-  container.value.addEventListener('wheel', (e: WheelEvent) => { e.preventDefault(); camDist += e.deltaY * 0.03; camDist = Math.max(8, Math.min(28, camDist)) }, { passive: false })
+  window.addEventListener('pointerup', (e: PointerEvent) => {
+    if (!isDragging) return; isDragging = false
+    // Check if it was a click (small movement)
+    const dx = e.clientX - prevX; const dy = e.clientY - prevY
+    if (Math.abs(dx) < 3 && Math.abs(dy) < 3) {
+      // Raycaster for sphere click
+      const rect = container.value!.getBoundingClientRect()
+      const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      )
+      raycaster.setFromCamera(mouse, camera)
+      const hits = raycaster.intersectObjects(spheres)
+      if (hits.length > 0) {
+        const idx = hits[0].object.userData.idx
+        if (idx !== undefined) onPlayerClick(idx)
+      }
+    }
+    setTimeout(() => { if (!isDragging) autoRotate = true }, 2000)
+  })
+  container.value.addEventListener('wheel', (e: WheelEvent) => {
+    e.preventDefault(); camDist += e.deltaY * 0.04; camDist = Math.max(10, Math.min(35, camDist))
+  }, { passive: false })
 
-  // Animation loop
   function animate() {
     animId = requestAnimationFrame(animate)
-    if (autoRotate) rotY += 0.003
+    if (autoRotate) rotY += 0.002
 
-    // Spherical coordinates: camera orbits around origin at distance camDist
     camera.position.x = camDist * Math.cos(rotX) * Math.sin(rotY)
     camera.position.y = camDist * Math.sin(rotX)
     camera.position.z = camDist * Math.cos(rotX) * Math.cos(rotY)
     camera.lookAt(0, 0, 0)
 
-    // Update flow dots (linear interpolation)
-    scene.children.forEach(c => { if (c.userData?.a) { c.userData.t += c.userData.speed; if (c.userData.t > 1) c.userData.t -= 1; c.position.lerpVectors(c.userData.a, c.userData.b, c.userData.t) } })
+    // Update dots
+    scene.children.forEach(c => {
+      if (c.userData?.lineGrp) {
+        c.userData.t += c.userData.speed
+        if (c.userData.t > 1) c.userData.t -= 1
+        c.position.lerpVectors(c.userData.a, c.userData.b, c.userData.t)
+      }
+    })
 
-    // Update HTML labels
+    // Update labels
     labelDivs.forEach((div, i) => {
       const wp = playerObjs[i].pos.clone().project(camera)
-      div.style.left = ((wp.x + 1) / 2 * W) + 'px'
-      div.style.top = ((-wp.y + 1) / 2 * H) + 'px'
-      div.style.display = wp.z > 1 ? 'none' : ''
+      div.style.left = ((wp.x + 1) / 2 * renderer.domElement.clientWidth) + 'px'
+      div.style.top = ((-wp.y + 1) / 2 * renderer.domElement.clientHeight) + 'px'
+      div.style.display = wp.z > 1 || wp.z < -1 ? 'none' : ''
+      div.style.color = i === activeIdx ? '#4fc3f7' : '#ccc'
+      div.style.fontSize = i === activeIdx ? '14px' : '12px'
+      div.style.textShadow = i === activeIdx ? '0 0 12px #4fc3f7' : '0 0 6px rgba(25,137,250,0.5)'
     })
 
     renderer.render(scene, camera)
@@ -165,20 +251,18 @@ async function init() {
 }
 
 onMounted(() => init())
-onUnmounted(() => { cancelAnimationFrame(animId) })
+onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout) })
 </script>
 
 <template>
-  <div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#0a0a1a;touch-action:none;-webkit-user-select:none;user-select:none;">
-    <!-- Top bar -->
+  <div style="position:relative;width:100vw;height:100dvh;overflow:hidden;background:#0a0a1a;touch-action:none;-webkit-user-select:none;user-select:none;">
     <div style="position:absolute;top:0;left:0;right:0;z-index:10;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
       <button @click="router.back()" style="background:rgba(0,0,0,0.5);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
       <span style="color:#fff;font-weight:600;">相生相克 · 3D</span>
-      <span style="font-size:11px;color:#666;">拖拽旋转 · 滚轮缩放</span>
+      <span style="font-size:11px;color:#666;">拖拽旋转 · 滚轮缩放 · 点击球员锁定</span>
     </div>
-    <!-- Legend -->
     <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;color:#aaa;background:rgba(0,0,0,0.5);padding:6px 14px;border-radius:12px;">
-      箭头指向被克方 · 颜色越深越压制
+      自动轮播中 · 点击球员锁定视角
     </div>
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;z-index:5;">加载中...</div>
     <div v-if="error" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e74c3c;z-index:5;">{{ error }}</div>
