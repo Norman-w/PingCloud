@@ -34,10 +34,14 @@ function domColor(wins: number, losses: number, side: 'win' | 'lose'): number {
   }
 }
 
+const error = ref('')
+
 async function init() {
-  const players: H2HPlayer[] = await fetch('/api/headtohead').then(r => r.json())
+  try {
+    const players: H2HPlayer[] = await fetch('/api/headtohead').then(r => r.json())
+  } catch(e: any) { error.value = '加载失败'; loading.value = false; return }
   loading.value = false
-  if (!container.value || players.length === 0) return
+  if (!container.value || players.length === 0) { error.value = '暂无球员数据'; return }
 
   const W = container.value.clientWidth
   const H = container.value.clientHeight
@@ -203,8 +207,8 @@ async function init() {
     camera.aspect = w / h; camera.updateProjectionMatrix()
     renderer.setSize(w, h); labelRenderer.setSize(w, h)
   })
-}
 
+}
 onMounted(() => { init() })
 onUnmounted(() => { cancelAnimationFrame(animId) })
 </script>
@@ -223,6 +227,8 @@ onUnmounted(() => { cancelAnimationFrame(animId) })
     </div>
     <!-- Loading -->
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;z-index:5;">加载中...</div>
+    <!-- Error -->
+    <div v-if="error" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e74c3c;font-size:16px;z-index:5;">{{ error }}</div>
     <!-- Three.js container -->
     <div ref="container" style="width:100%;height:100%;"></div>
   </div>
