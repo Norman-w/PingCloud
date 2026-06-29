@@ -33,8 +33,8 @@ async function init() {
   scene.background = new THREE.Color(0x0a0a1a)
   scene.fog = new THREE.Fog(0x0a0a1a, 10, 40)
 
-  camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100)
-  camera.position.set(0, 3, 14)
+  camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100)
+  camera.position.set(0, 3, 18)
   camera.lookAt(0, 0, 0)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -103,30 +103,27 @@ async function init() {
 
       const winnerPos = (winRate > 0.5 ? playerObjs[i].pos : playerObjs[j].pos).clone()
       const loserPos = (winRate > 0.5 ? playerObjs[j].pos : playerObjs[i].pos).clone()
-      const mid = winnerPos.clone().add(loserPos).multiplyScalar(0.5)
-      const dir = loserPos.clone().sub(winnerPos).normalize()
-      mid.add(new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(1.5))
 
-      const curve = new THREE.QuadraticBezierCurve3(winnerPos, mid, loserPos)
-      const tubeGeo = new THREE.TubeGeometry(curve, 40, 0.05, 8, false)
+      // Straight line from winner to loser (piercing through the sphere)
       const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
-      const color = new THREE.Color().setHSL(0, 0.9, intensity * 0.5 + 0.15)
-      const tubeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: intensity, depthWrite: false })
-      scene.add(new THREE.Mesh(tubeGeo, tubeMat))
+      const color = new THREE.Color().setHSL(0, 0.9, intensity * 0.45 + 0.2)
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([winnerPos, loserPos])
+      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 + Math.abs(winRate - 0.5) * 0.5, depthTest: false })
+      scene.add(new THREE.Line(lineGeo, lineMat))
 
-      // Flow dots
-      const dotG = new THREE.SphereGeometry(0.07, 8, 8)
-      const dotM = new THREE.MeshBasicMaterial({ color })
+      // Flow dots along straight line
+      const dotG = new THREE.SphereGeometry(0.08, 8, 8)
+      const dotM = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0, 1, 0.55) })
       for (let k = 0; k < 2; k++) {
         const dot = new THREE.Mesh(dotG, dotM)
-        dot.userData = { curve, t: k * 0.5, speed: 0.003 + Math.random() * 0.004 }
+        dot.userData = { a: winnerPos.clone(), b: loserPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004 }
         scene.add(dot)
       }
     })
   })
 
-  // Mouse/touch controls
-  container.value.addEventListener('pointerdown', (e: PointerEvent) => { isDragging = true; prevX = e.clientX; prevY = e.clientY; autoRotate = false })
+  // Mouse/touch controls (prevent page scroll)
+  container.value.addEventListener('pointerdown', (e: PointerEvent) => { e.preventDefault(); isDragging = true; prevX = e.clientX; prevY = e.clientY; autoRotate = false })
   window.addEventListener('pointermove', (e: PointerEvent) => {
     if (!isDragging) return; rotY -= (e.clientX - prevX) * 0.005; rotX += (e.clientY - prevY) * 0.005
     rotX = Math.max(-1.4, Math.min(1.4, rotX)); prevX = e.clientX; prevY = e.clientY
@@ -145,8 +142,8 @@ async function init() {
     camera.position.z = camDist * Math.cos(rotX) * Math.cos(rotY)
     camera.lookAt(0, 0, 0)
 
-    // Update flow dots
-    scene.children.forEach(c => { if (c.userData?.curve) { c.userData.t += c.userData.speed; if (c.userData.t > 1) c.userData.t -= 1; c.position.copy(c.userData.curve.getPoint(c.userData.t)) } })
+    // Update flow dots (linear interpolation)
+    scene.children.forEach(c => { if (c.userData?.a) { c.userData.t += c.userData.speed; if (c.userData.t > 1) c.userData.t -= 1; c.position.lerpVectors(c.userData.a, c.userData.b, c.userData.t) } })
 
     // Update HTML labels
     labelDivs.forEach((div, i) => {
@@ -172,7 +169,7 @@ onUnmounted(() => { cancelAnimationFrame(animId) })
 </script>
 
 <template>
-  <div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#0a0a1a;">
+  <div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:#0a0a1a;touch-action:none;-webkit-user-select:none;user-select:none;">
     <!-- Top bar -->
     <div style="position:absolute;top:0;left:0;right:0;z-index:10;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
       <button @click="router.back()" style="background:rgba(0,0,0,0.5);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
