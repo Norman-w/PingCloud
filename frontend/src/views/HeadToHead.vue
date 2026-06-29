@@ -178,7 +178,7 @@ async function init() {
 
       const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
       const lineGeo = new THREE.BufferGeometry().setFromPoints([wPos, lPos])
-      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.1, depthTest: false })
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x332222, transparent: true, opacity: 0.1, depthTest: false })
       const line = new THREE.Line(lineGeo, lineMat)
       scene.add(line)
 
