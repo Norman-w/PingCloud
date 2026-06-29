@@ -283,11 +283,11 @@ onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); cle
       <span style="color:#fff;font-weight:600;">相生相克 · 3D</span>
       <span style="font-size:11px;color:#666;">点击球员锁定</span>
     </div>
-    <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:0;background:rgba(0,0,0,0.5);border-radius:12px;overflow:hidden;">
-      <button @click="setMode('dominate')" style="padding:8px 20px;border:none;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:transparent;border-bottom:2px solid;"
-        :style="viewMode==='dominate'?{borderColor:'#e74c3c',color:'#e74c3c'}:{borderColor:'transparent',color:'#666'}">相克</button>
-      <button @click="setMode('feed')" style="padding:8px 20px;border:none;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:transparent;border-bottom:2px solid;"
-        :style="viewMode==='feed'?{borderColor:'#07c160',color:'#07c160'}:{borderColor:'transparent',color:'#666'}">福星</button>
+    <div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:20;display:flex;background:rgba(0,0,0,0.7);border-radius:12px;overflow:hidden;border:1px solid #333;">
+      <button @click="setMode('dominate')" style="padding:10px 28px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:transparent;border-bottom:2px solid;transition:all 0.2s;"
+        :style="viewMode==='dominate'?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#999',borderColor:'transparent'}">🔴 相克</button>
+      <button @click="setMode('feed')" style="padding:10px 28px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:transparent;border-bottom:2px solid;transition:all 0.2s;"
+        :style="viewMode==='feed'?{background:'#07c160',color:'#fff',borderColor:'#07c160'}:{background:'transparent',color:'#999',borderColor:'transparent'}">🟢 福星</button>
     </div>
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;z-index:5;">加载中...</div>
     <div v-if="error" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e74c3c;z-index:5;">{{ error }}</div>
