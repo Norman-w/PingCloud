@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { IconPingPong, IconSwords, IconUserPlus, IconTrophy, IconScoreboard, IconSpeakerphone } from '@tabler/icons-vue'
+import { IconPingPong, IconSwords, IconTrophy, IconScoreboard, IconSpeakerphone } from '@tabler/icons-vue'
 import { api, type RankingEntry } from '../api'
 import { unreadCount } from '../bulletins'
 
@@ -81,10 +81,6 @@ function winRate(p: RankingEntry) {
       <button class="quick-action qa-match" @click="router.push({ name: 'SessionView', query: { new: '1' } })">
         <IconSwords :size="28" :stroke-width="2" />
         <span>快速记分</span>
-      </button>
-      <button class="quick-action qa-player" @click="router.push({ name: 'AddPlayer' })">
-        <IconUserPlus :size="28" :stroke-width="2" />
-        <span>添加球员</span>
       </button>
       <button class="quick-action" style="background: linear-gradient(135deg, #e67e22, #f39c12);" @click="router.push({ name: 'HeadToHead' })">
         <IconSwords :size="28" :stroke-width="2" />

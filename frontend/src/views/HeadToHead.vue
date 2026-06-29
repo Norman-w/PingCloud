@@ -206,7 +206,7 @@ async function init() {
         const ctx = canvas.getContext('2d')!
         ctx.fillStyle = '#' + initColor.getHexString(); ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('克', 32, 32)
         const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter
-        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.08, depthTest: false })
+        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.08, depthTest: false, depthWrite: false })
         const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.4, 0.4, 1)
         sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.006 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: '克' }
         scene.add(sprite)
@@ -302,9 +302,9 @@ onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); cle
   <div style="position:relative;width:100vw;height:100dvh;overflow:hidden;background:#0a0a1a;touch-action:none;-webkit-user-select:none;user-select:none;">
     <div style="position:absolute;top:0;left:0;right:0;z-index:10;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
       <button @click="router.back()" style="background:rgba(0,0,0,0.5);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
-      <div style="display:flex;background:rgba(0,0,0,0.5);border-radius:10px;overflow:hidden;">
+      <div style="display:flex;background:rgba(0,0,0,0.5);border-radius:10px;overflow:hidden;border:1px solid #444;">
         <button @click="setMode('dominate')" style="padding:6px 16px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:transparent;"
-          :style="viewMode==='dominate'?{background:'#e74c3c',color:'#fff'}:{background:'transparent',color:'#999'}">相克</button>
+          :style="viewMode==='dominate'?{background:'#e74c3c',color:'#fff'}:{background:'transparent',color:'#999'}">克制</button>
         <button @click="setMode('feed')" style="padding:6px 16px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:transparent;"
           :style="viewMode==='feed'?{background:'#07c160',color:'#fff'}:{background:'transparent',color:'#999'}">福星</button>
       </div>
