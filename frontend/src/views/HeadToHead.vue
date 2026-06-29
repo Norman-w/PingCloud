@@ -17,6 +17,7 @@ let autoRotate = true, isDragging = false, prevX = 0, prevY = 0
 let spheres: THREE.Mesh[] = []
 let lineGroups: { line: THREE.Line; dots: THREE.Mesh[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
 let activeIdx = 0
+const viewMode = ref<'dominate' | 'feed'>('dominate')
 let mode: 'dominate' | 'feed' = 'dominate'
 let cycleTimer: any = null
 let clickTimeout: any = null
@@ -74,6 +75,7 @@ function startCycle() {
       cycleCount++
       if (cycleCount % 2 === 0) {
         mode = mode === 'dominate' ? 'feed' : 'dominate'
+        viewMode.value = mode
       }
     }
     setActive(activeIdx)
@@ -81,7 +83,7 @@ function startCycle() {
 }
 
 function setMode(m: 'dominate' | 'feed') {
-  mode = m; setActive(activeIdx)
+  mode = m; viewMode.value = m; setActive(activeIdx)
 }
 
 async function init() {
@@ -283,9 +285,9 @@ onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); cle
     </div>
     <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:0;background:rgba(0,0,0,0.5);border-radius:12px;overflow:hidden;">
       <button @click="setMode('dominate')" style="padding:8px 20px;border:none;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:transparent;border-bottom:2px solid;"
-        :style="mode==='dominate'?{borderColor:'#e74c3c',color:'#e74c3c'}:{borderColor:'transparent',color:'#666'}">相克</button>
+        :style="viewMode==='dominate'?{borderColor:'#e74c3c',color:'#e74c3c'}:{borderColor:'transparent',color:'#666'}">相克</button>
       <button @click="setMode('feed')" style="padding:8px 20px;border:none;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:transparent;border-bottom:2px solid;"
-        :style="mode==='feed'?{borderColor:'#07c160',color:'#07c160'}:{borderColor:'transparent',color:'#666'}">福星</button>
+        :style="viewMode==='feed'?{borderColor:'#07c160',color:'#07c160'}:{borderColor:'transparent',color:'#666'}">福星</button>
     </div>
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;z-index:5;">加载中...</div>
     <div v-if="error" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e74c3c;z-index:5;">{{ error }}</div>
