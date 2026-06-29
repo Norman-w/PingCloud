@@ -15,29 +15,27 @@ let animId: number
 let camDist = 20, rotY = 0, rotX = 0.4
 let autoRotate = true, isDragging = false, prevX = 0, prevY = 0
 let spheres: THREE.Mesh[] = []
-let lineGroups: { mesh: THREE.Line | THREE.Mesh; dots: THREE.Mesh[]; playerI: number; opponentJ: number; intensity: number }[] = []
+let lineGroups: { mesh: THREE.Line | THREE.Mesh; dots: THREE.Mesh[]; winnerIdx: number; loserIdx: number; intensity: number }[] = []
 let activeIdx = 0
 let cycleTimer: any = null
 let clickTimeout: any = null
 const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
 const labelDivs: HTMLDivElement[] = []
-let radius = 6
+let radius = 5
 
 function setActive(idx: number) {
   activeIdx = idx
-  const activeId = playerObjs[idx]?.id
 
   lineGroups.forEach(g => {
-    const active = g.playerI === idx || g.opponentJ === idx
-    const i = active ? g.intensity : 0.15
+    const active = g.winnerIdx === idx // only show lines where this player dominates
+    const i = active ? g.intensity : 0.08
     if (g.mesh instanceof THREE.Mesh) {
       (g.mesh.material as THREE.MeshBasicMaterial).opacity = i
     } else {
-      (g.mesh.material as THREE.LineBasicMaterial).opacity = active ? 0.6 + g.intensity * 0.4 : 0.1
+      (g.mesh.material as THREE.LineBasicMaterial).opacity = active ? 0.5 + g.intensity * 0.5 : 0.06
     }
-    // Dim non-active dots
     g.dots.forEach(d => {
-      (d.material as THREE.MeshBasicMaterial).opacity = active ? 0.9 : 0.1
+      (d.material as THREE.MeshBasicMaterial).opacity = active ? 0.9 : 0.05
     })
   })
 
@@ -131,7 +129,7 @@ async function init() {
     // Label
     const div = document.createElement('div')
     div.textContent = p.name
-    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:600;text-shadow:0 0 8px #1989fa;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap;'
+    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:700;text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap;'
     container.value!.appendChild(div)
     labelDivs.push(div)
   })
@@ -150,8 +148,10 @@ async function init() {
       const winRate = r.wins / total
       if (Math.abs(winRate - 0.5) < 0.01) return
 
-      const winnerPos = (winRate > 0.5 ? playerObjs[i].pos : playerObjs[j].pos).clone()
-      const loserPos = (winRate > 0.5 ? playerObjs[j].pos : playerObjs[i].pos).clone()
+      const wIdx = winRate > 0.5 ? i : j
+      const lIdx = winRate > 0.5 ? j : i
+      const winnerPos = playerObjs[wIdx].pos.clone()
+      const loserPos = playerObjs[lIdx].pos.clone()
 
       const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
       const color = new THREE.Color().setHSL(0, 0.9, intensity * 0.45 + 0.2)
@@ -169,7 +169,7 @@ async function init() {
         scene.add(dot)
         dots.push(dot)
       }
-      lineGroups.push({ mesh: line, dots, playerI: i, opponentJ: j, intensity })
+      lineGroups.push({ mesh: line, dots, winnerIdx: wIdx, loserIdx: lIdx, intensity })
     })
   })
 
@@ -234,9 +234,9 @@ async function init() {
       div.style.left = ((wp.x + 1) / 2 * renderer.domElement.clientWidth) + 'px'
       div.style.top = ((-wp.y + 1) / 2 * renderer.domElement.clientHeight) + 'px'
       div.style.display = wp.z > 1 || wp.z < -1 ? 'none' : ''
-      div.style.color = i === activeIdx ? '#4fc3f7' : '#ccc'
+      div.style.color = i === activeIdx ? '#fff' : '#999'
       div.style.fontSize = i === activeIdx ? '14px' : '12px'
-      div.style.textShadow = i === activeIdx ? '0 0 12px #4fc3f7' : '0 0 6px rgba(25,137,250,0.5)'
+      div.style.textShadow = i === activeIdx ? '0 0 6px #000, 0 0 16px #ff6600' : '0 0 4px #000'
     })
 
     renderer.render(scene, camera)
