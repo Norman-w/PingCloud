@@ -15,7 +15,8 @@ let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRe
 let animId: number
 let autoRotate = true
 let isDragging = false, prevX = 0, prevY = 0
-let rotY = 0, rotX = 0.3
+let camDist = 14
+let rotY = 0, rotX = 0.4
 
 async function init() {
   let players: H2HPlayer[]
@@ -30,10 +31,10 @@ async function init() {
 
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x0a0a1a)
-  scene.fog = new THREE.Fog(0x0a0a1a, 8, 30)
+  scene.fog = new THREE.Fog(0x0a0a1a, 10, 40)
 
   camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100)
-  camera.position.set(0, 0, 16)
+  camera.position.set(0, 3, 14)
   camera.lookAt(0, 0, 0)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -124,22 +125,24 @@ async function init() {
     })
   })
 
-  // Mouse events for manual rotation
+  // Mouse/touch controls
   container.value.addEventListener('pointerdown', (e: PointerEvent) => { isDragging = true; prevX = e.clientX; prevY = e.clientY; autoRotate = false })
   window.addEventListener('pointermove', (e: PointerEvent) => {
-    if (!isDragging) return; rotY += (e.clientX - prevX) * 0.005; rotX += (e.clientY - prevY) * 0.005
-    rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotX)); prevX = e.clientX; prevY = e.clientY
+    if (!isDragging) return; rotY -= (e.clientX - prevX) * 0.005; rotX += (e.clientY - prevY) * 0.005
+    rotX = Math.max(-1.4, Math.min(1.4, rotX)); prevX = e.clientX; prevY = e.clientY
   })
   window.addEventListener('pointerup', () => { isDragging = false; setTimeout(() => { if (!isDragging) autoRotate = true }, 2000) })
-  container.value.addEventListener('wheel', (e: WheelEvent) => { e.preventDefault(); camera.position.z += e.deltaY * 0.02; camera.position.z = Math.max(8, Math.min(28, camera.position.z)) }, { passive: false })
+  container.value.addEventListener('wheel', (e: WheelEvent) => { e.preventDefault(); camDist += e.deltaY * 0.03; camDist = Math.max(8, Math.min(28, camDist)) }, { passive: false })
 
   // Animation loop
   function animate() {
     animId = requestAnimationFrame(animate)
     if (autoRotate) rotY += 0.003
-    const cx = Math.sin(rotX) * camera.position.z; const cz = Math.cos(rotX) * camera.position.z
-    camera.position.x = Math.sin(rotY) * cx; camera.position.z = Math.cos(rotY) * cx
-    camera.position.y = 0 // keep level
+
+    // Spherical coordinates: camera orbits around origin at distance camDist
+    camera.position.x = camDist * Math.cos(rotX) * Math.sin(rotY)
+    camera.position.y = camDist * Math.sin(rotX)
+    camera.position.z = camDist * Math.cos(rotX) * Math.cos(rotY)
     camera.lookAt(0, 0, 0)
 
     // Update flow dots
