@@ -49,12 +49,12 @@ function setActive(idx: number) {
       sm.opacity = active ? 0.9 : 0.05
       const ch = mode === 'dominate' ? '克' : '福'
       // Update text
-      if (d.userData.char !== ch || d.userData.lastColor !== color.getHexString()) {
-        d.userData.char = ch; d.userData.lastColor = color.getHexString()
+      if (d.userData.char !== ch) {
+        d.userData.char = ch
         const canvas = d.userData.canvas; const ctx = canvas.getContext('2d')!
         ctx.clearRect(0, 0, 64, 64)
-        ctx.fillStyle = '#' + color.getHexString()
-        ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillStyle = ch === '克' ? '#ff4444' : '#44dd44'
+        ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillText(ch, 32, 32)
         d.userData.tex.needsUpdate = true
       }
@@ -95,7 +95,7 @@ function startCycle() {
       }
     }
     setActive(activeIdx)
-  }, 2000)
+  }, 3000)
 }
 
 function setMode(m: 'dominate' | 'feed') {
