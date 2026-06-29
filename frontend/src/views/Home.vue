@@ -87,7 +87,7 @@ function winRate(p: RankingEntry) {
         <span>添加球员</span>
       </button>
       <button class="quick-action" style="background: linear-gradient(135deg, #e67e22, #f39c12);" @click="router.push({ name: 'HeadToHead' })">
-        <span class="qa-icon" style="font-size:28px;">⚔️</span>
+        <IconSwords :size="28" :stroke-width="2" />
         <span>相生相克</span>
       </button>
       <button class="quick-action" style="background: linear-gradient(135deg, #0a0a2e, #1a1a4e);" @click="router.push({ name: 'Scoreboard' })">
