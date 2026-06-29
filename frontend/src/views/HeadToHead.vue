@@ -196,7 +196,7 @@ async function init() {
       const lineGeo = new THREE.BufferGeometry().setFromPoints([wPos, lPos])
       const hsl = { h: 0, s: 0.9, l: 0.08 }
       const initColor = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
-      const lineMat = new THREE.LineBasicMaterial({ color: initColor, transparent: true, opacity: 0.08, depthTest: false })
+      const lineMat = new THREE.LineBasicMaterial({ color: initColor, transparent: true, opacity: 0.08, depthTest: false, depthWrite: false })
       const line = new THREE.Line(lineGeo, lineMat)
       scene.add(line)
 
@@ -207,7 +207,7 @@ async function init() {
         ctx.fillStyle = '#' + initColor.getHexString(); ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('克', 32, 32)
         const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter
         const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.08, depthTest: false, depthWrite: false })
-        const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.4, 0.4, 1)
+        const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.4, 0.4, 1); sprite.renderOrder = 1
         sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.006 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: '克' }
         scene.add(sprite)
         dots.push(sprite)
