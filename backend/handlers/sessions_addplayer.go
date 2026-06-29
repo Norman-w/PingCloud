@@ -43,7 +43,10 @@ func AddPlayerToSession(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec("INSERT INTO session_players (session_id, player_id) VALUES ($1, $2)", sessionID, req.PlayerID)
+	// Capture current rating as session starting rating
+	var sr int
+	db.DB.QueryRow("SELECT current_rating FROM players WHERE id=$1", req.PlayerID).Scan(&sr)
+	_, err = tx.Exec("INSERT INTO session_players (session_id, player_id, starting_rating) VALUES ($1, $2, $3)", sessionID, req.PlayerID, sr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
