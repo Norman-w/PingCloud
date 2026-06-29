@@ -121,48 +121,50 @@ async function init() {
     scene.add(label)
   })
 
-  // Lines between all pairs
+  // Lines: only show dominant relationships (one arrow per pair, winner→loser)
+  const drawn = new Set<string>()
   players.forEach((p, i) => {
     p.records.forEach(r => {
       const j = playerObjs.findIndex(po => po.id === r.opponent_id)
       if (j < 0 || r.wins + r.losses === 0) return
 
+      // Skip if we already drew this pair
+      const key = [i, j].sort().join('-')
+      if (drawn.has(key)) return
+      drawn.add(key)
+
+      // Only draw if there's a clear winner (winRate ≠ 50%)
       const total = r.wins + r.losses
       const winRate = r.wins / total
-      const isDominant = winRate >= 0.5
+      if (Math.abs(winRate - 0.5) < 0.01) return // skip 50-50
 
-      // Curve toward the loser
-      const winnerPos = isDominant ? playerObjs[i].pos : playerObjs[j].pos
-      const loserPos = isDominant ? playerObjs[j].pos : playerObjs[i].pos
+      // Determine winner/loser
+      const winnerIsRow = winRate > 0.5
+      const winnerPos = winnerIsRow ? playerObjs[i].pos : playerObjs[j].pos
+      const loserPos = winnerIsRow ? playerObjs[j].pos : playerObjs[i].pos
+
+      // Curve from winner toward loser
       const mid = winnerPos.clone().add(loserPos).multiplyScalar(0.5)
       const dir = loserPos.clone().sub(winnerPos).normalize()
       const perp = new THREE.Vector3(-dir.z, 0, dir.x)
-      const curveAmount = 0.8 + (1 - Math.abs(winRate - 0.5)) * 2
-      mid.add(perp.clone().multiplyScalar(curveAmount * (isDominant ? 1 : -1)))
+      mid.add(perp.clone().multiplyScalar(1.2))
 
       const curve = new THREE.QuadraticBezierCurve3(winnerPos, mid, loserPos)
-      const points = curve.getPoints(40)
-      const lineGeo = new THREE.BufferGeometry().setFromPoints(points)
+      const points = curve.getPoints(50)
 
-      // Color intensity from win rate
-      const intensity = 0.3 + Math.abs(winRate - 0.5) * 1.4 // 0.3~1.0
-      const color = new THREE.Color()
-      if (isDominant) {
-        color.setRGB(0, intensity * 0.5 + 0.3, 0) // Green toward loser
-      } else {
-        color.setRGB(intensity * 0.7 + 0.3, 0, 0) // Red toward loser
-      }
+      // Tube for thick visible lines
+      const tubeGeo = new THREE.TubeGeometry(curve, 40, 0.04, 8, false)
+      const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
+      const color = new THREE.Color().setHSL(0, 0.9, intensity * 0.5 + 0.15)
+      const tubeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: intensity, depthWrite: false })
+      scene.add(new THREE.Mesh(tubeGeo, tubeMat))
 
-      const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.25 + Math.abs(winRate - 0.5) * 0.75, linewidth: 1 })
-      const line = new THREE.Line(lineGeo, lineMat)
-      scene.add(line)
-
-      // Small flow particles along the line
-      const dotGeo = new THREE.SphereGeometry(0.06, 8, 8)
-      const dotMat = new THREE.MeshBasicMaterial({ color })
-      for (let k = 0; k < 3; k++) {
+      // Glow dots along curve
+      const dotGeo = new THREE.SphereGeometry(0.08, 8, 8)
+      const dotMat = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0, 1, 0.6) })
+      for (let k = 0; k < 2; k++) {
         const dot = new THREE.Mesh(dotGeo, dotMat)
-        dot.userData = { curve, t: k / 3, speed: 0.002 + Math.random() * 0.003 }
+        dot.userData = { curve, t: k * 0.5, speed: 0.003 + Math.random() * 0.004 }
         scene.add(dot)
       }
     })
@@ -214,9 +216,7 @@ onUnmounted(() => { cancelAnimationFrame(animId) })
     </div>
     <!-- Legend -->
     <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:16px;font-size:11px;color:#aaa;background:rgba(0,0,0,0.5);padding:6px 14px;border-radius:12px;">
-      <span><span style="display:inline-block;width:10px;height:10px;background:#0c0;border-radius:50%;vertical-align:middle;margin-right:4px;"></span>克制</span>
-      <span><span style="display:inline-block;width:10px;height:10px;background:#c00;border-radius:50%;vertical-align:middle;margin-right:4px;"></span>被克</span>
-      <span>颜色越深越压制</span>
+      <span>箭头指向被克方 · 颜色越深越压制</span>
     </div>
     <!-- Loading -->
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;z-index:5;">加载中...</div>
