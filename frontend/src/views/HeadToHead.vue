@@ -12,10 +12,10 @@ interface H2HPlayer { id: number; name: string; records: { opponent_id: number; 
 
 let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, raycaster: THREE.Raycaster
 let animId: number
-let camDist = 20, rotY = 0, rotX = 0.4
+let camDist = 24, rotY = 0, rotX = 0.4
 let autoRotate = true, isDragging = false, prevX = 0, prevY = 0
 let spheres: THREE.Mesh[] = []
-let lineGroups: { line: THREE.Line; dots: THREE.Mesh[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
+let lineGroups: { line: THREE.Line; dots: THREE.Sprite[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
 let activeIdx = 0
 const viewMode = ref<'dominate' | 'feed'>('dominate')
 let mode: 'dominate' | 'feed' = 'dominate'
@@ -24,7 +24,7 @@ let clickTimeout: any = null
 let cycleCount = 0
 const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
 const labelDivs: HTMLDivElement[] = []
-let radius = 5
+let radius = 4
 
 function setActive(idx: number) {
   activeIdx = idx
@@ -45,9 +45,20 @@ function setActive(idx: number) {
     mat.opacity = alpha
 
     g.dots.forEach(d => {
-      const dm = d.material as THREE.MeshBasicMaterial
-      dm.color = new THREE.Color().setHSL(hsl.h, 1, 0.55)
-      dm.opacity = active ? 0.9 : 0.05
+      const sm = d.material as THREE.SpriteMaterial
+      sm.opacity = active ? 0.9 : 0.05
+      // Update text and color
+      const ch = mode === 'dominate' ? '克' : '福'
+      if (d.userData.char !== ch) {
+        d.userData.char = ch
+        const canvas = d.userData.canvas
+        const ctx = canvas.getContext('2d')!
+        ctx.clearRect(0, 0, 64, 64)
+        ctx.fillStyle = '#' + color.getHexString()
+        ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(ch, 32, 32)
+        d.userData.tex.needsUpdate = true
+      }
     })
   })
 
@@ -182,14 +193,16 @@ async function init() {
       const line = new THREE.Line(lineGeo, lineMat)
       scene.add(line)
 
-      const dots: THREE.Mesh[] = []
-      const dotG = new THREE.SphereGeometry(0.08, 8, 8)
-      const dotM = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0, 1, 0.55), transparent: true, opacity: 0.1 })
+      const dots: THREE.Sprite[] = []
       for (let k = 0; k < 2; k++) {
-        const dot = new THREE.Mesh(dotG, dotM.clone())
-        dot.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004, lineGrp: true }
-        scene.add(dot)
-        dots.push(dot)
+        const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64
+        const ctx = canvas.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('克', 32, 32)
+        const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter
+        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.1, depthTest: false })
+        const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.6, 0.6, 1)
+        sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.004 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: '克' }
+        scene.add(sprite)
+        dots.push(sprite)
       }
       lineGroups.push({ line, dots, winnerIdx: wIdx, loserIdx: lIdx, winnerPos: wPos.clone(), loserPos: lPos.clone(), intensity })
     })
@@ -229,7 +242,7 @@ async function init() {
     setTimeout(() => { if (!isDragging) autoRotate = true }, 2000)
   })
   container.value.addEventListener('wheel', (e: WheelEvent) => {
-    e.preventDefault(); camDist += e.deltaY * 0.04; camDist = Math.max(10, Math.min(35, camDist))
+    e.preventDefault(); camDist += e.deltaY * 0.04; camDist = Math.max(14, Math.min(40, camDist))
   }, { passive: false })
 
   function animate() {
@@ -280,14 +293,13 @@ onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); cle
   <div style="position:relative;width:100vw;height:100dvh;overflow:hidden;background:#0a0a1a;touch-action:none;-webkit-user-select:none;user-select:none;">
     <div style="position:absolute;top:0;left:0;right:0;z-index:10;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
       <button @click="router.back()" style="background:rgba(0,0,0,0.5);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
-      <span style="color:#fff;font-weight:600;">相生相克 · 3D</span>
+      <div style="display:flex;background:rgba(0,0,0,0.5);border-radius:10px;overflow:hidden;">
+        <button @click="setMode('dominate')" style="padding:6px 16px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:transparent;"
+          :style="viewMode==='dominate'?{background:'#e74c3c',color:'#fff'}:{background:'transparent',color:'#999'}">相克</button>
+        <button @click="setMode('feed')" style="padding:6px 16px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:transparent;"
+          :style="viewMode==='feed'?{background:'#07c160',color:'#fff'}:{background:'transparent',color:'#999'}">福星</button>
+      </div>
       <span style="font-size:11px;color:#666;">点击球员锁定</span>
-    </div>
-    <div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:20;display:flex;background:rgba(0,0,0,0.7);border-radius:12px;overflow:hidden;border:1px solid #333;">
-      <button @click="setMode('dominate')" style="padding:10px 28px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:transparent;border-bottom:2px solid;transition:all 0.2s;"
-        :style="viewMode==='dominate'?{background:'#e74c3c',color:'#fff',borderColor:'#e74c3c'}:{background:'transparent',color:'#999',borderColor:'transparent'}">🔴 相克</button>
-      <button @click="setMode('feed')" style="padding:10px 28px;border:none;font-size:14px;font-weight:700;cursor:pointer;background:transparent;border-bottom:2px solid;transition:all 0.2s;"
-        :style="viewMode==='feed'?{background:'#07c160',color:'#fff',borderColor:'#07c160'}:{background:'transparent',color:'#999',borderColor:'transparent'}">🟢 福星</button>
     </div>
     <div v-if="loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;z-index:5;">加载中...</div>
     <div v-if="error" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e74c3c;z-index:5;">{{ error }}</div>
