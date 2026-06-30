@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconChartBar, IconList } from '@tabler/icons-vue'
+import { IconChartBar, IconList, IconScoreboard } from '@tabler/icons-vue'
 import ScoreDialog from './ScoreDialog.vue'
 import AddPlayerDialog from './AddPlayerDialog.vue'
 import { sessionChange, sessionDisplayRating, changeSign, type SessionDetail, type SessionMatch } from '../session-utils'
@@ -61,18 +61,20 @@ const emit = defineEmits<{
     </div>
 
     <!-- Match list -->
-    <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;justify-content:space-between;">
-      <span>
-        <IconList :size="18" :stroke-width="2" style="vertical-align:-3px;" />
-        对阵表
-      </span>
-      <a :href="`/#/scoreboard?a=${encodeURIComponent(session.players[0]?.name||'')}&b=${encodeURIComponent(session.players[1]?.name||'')}`" style="text-decoration:none;font-size:12px;color:#1989fa;background:#e8f4ff;padding:4px 10px;border-radius:8px;font-weight:600;" target="_blank">记分牌 ▸</a>
+    <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;gap:6px;">
+      <IconList :size="18" :stroke-width="2" style="vertical-align:-3px;" />
+      对阵表
     </div>
     <div style="background:#fff;border-radius:12px;margin:4px 16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;">
       <div v-for="(m,mi) in session.matches" :key="m.id"
         @click="emit('openScoreEditor', m)"
         style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #f5f5f5;cursor:pointer;">
-        <span style="width:32px;font-size:12px;color:#c8c9cc;flex-shrink:0;">#{{ mi+1 }}</span>
+        <span style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;min-width:36px;">
+          <a :href="`/#/scoreboard?a=${encodeURIComponent(m.player_a_name)}&b=${encodeURIComponent(m.player_b_name)}`" target="_blank" style="text-decoration:none;font-size:14px;line-height:1;" @click.stop title="记分牌">
+            <IconScoreboard :size="16" :stroke-width="1.5" style="color:#1989fa;" />
+          </a>
+          <span style="font-size:12px;color:#c8c9cc;">#{{ mi+1 }}</span>
+        </span>
         <div style="flex:1;text-align:right;font-weight:400;" :style="{fontWeight:m.winner_id===m.player_a_id?700:400}">
           <span style="font-size:10px;color:#c8c9cc;">{{ mi+1 }}号</span> {{ m.player_a_name }}
           <span v-if="m.played" style="font-size:11px;display:block;" :style="{color:m.rating_change_a>=0?'#07c160':'#ee0a24'}">{{ changeSign(m.rating_change_a) }}{{ m.rating_change_a }}</span>

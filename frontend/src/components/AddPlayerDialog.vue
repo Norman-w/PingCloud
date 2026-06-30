@@ -8,7 +8,7 @@ const selectedId = ref<number | null>(null)
 
 <template>
   <div v-if="show" style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: flex-end;" @click.self="emit('update:show', false)">
-    <div style="background: #fff; border-radius: 16px 16px 0 0; padding: 24px 16px 32px; width: 100%; max-height: 70vh; overflow-y: auto;">
+    <div style="background: #fff; border-radius: 16px 16px 0 0; padding: 24px 16px 80px; width: 100%; max-height: 70vh; overflow-y: auto;">
       <h3 style="text-align: center; margin-bottom: 16px; font-size: 18px;">拉人加入「{{ sessionName }}」</h3>
       <div style="font-size: 13px; color: #969799; margin-bottom: 12px; text-align: center;">已打过的场次保留，没打的重新编排</div>
 
