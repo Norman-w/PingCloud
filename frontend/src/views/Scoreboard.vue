@@ -144,12 +144,12 @@ function exitScoreboard() { clearInterval(timer); if (document.fullscreenElement
     <!-- Back button -->
     <button @click="router.back()" style="position:absolute;top:16px;left:16px;background:rgba(255,255,255,0.1);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
     <div style="font-size:28px;font-weight:900;">记分牌</div>
-    <div style="width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;">
+    <div style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;overflow-x:auto;">
       <!-- Names side by side -->
-      <div style="display:flex;gap:12px;align-items:center;">
-        <input v-model="nameA" placeholder="选手A" style="flex:1;padding:14px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
-        <span style="color:#666;font-size:20px;font-weight:900;">VS</span>
-        <input v-model="nameB" placeholder="选手B" style="flex:1;padding:14px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input v-model="nameA" placeholder="选手A" style="flex:1;min-width:0;padding:14px 8px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
+        <span style="color:#666;font-size:16px;font-weight:900;flex-shrink:0;">VS</span>
+        <input v-model="nameB" placeholder="选手B" style="flex:1;min-width:0;padding:14px 8px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
       </div>
       <div style="font-size:13px;color:#aaa;text-align:center;">先手发球</div>
       <div style="display:flex;gap:8px;">
