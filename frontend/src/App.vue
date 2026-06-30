@@ -7,7 +7,7 @@ const router = useRouter()
 const route = useRoute()
 
 const tabs = [
-  { name: 'Home', label: '排名', component: IconHome },
+  { name: 'Home', label: '首页', component: IconHome },
   { name: 'SessionView', label: '活动', component: IconTournament },
   { name: 'AddPlayer', label: '球员', component: IconUserPlus },
 ]

@@ -290,7 +290,7 @@ function matchIndex(mid: number): number {
 
         <!-- Quick add popup - simple overlay -->
         <div v-if="showAdd" style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; display: flex; align-items: flex-end;" @click.self="showAdd = false">
-          <div style="background: #fff; border-radius: 16px 16px 0 0; padding: 24px 16px 32px; width: 100%;">
+          <div style="background: #fff; border-radius: 16px 16px 0 0; padding: 24px 16px 80px; width: 100%;">
             <h3 style="text-align: center; margin-bottom: 20px; font-size: 18px;">快速添加球员</h3>
             <input v-model="newName" placeholder="姓名" style="width: 100%; padding: 12px; border: 1px solid #ebedf0; border-radius: 8px; font-size: 15px; margin-bottom: 8px; outline: none; box-sizing: border-box;" />
             <input v-model="newRating" type="number" placeholder="初始积分（默认 1500）" style="width: 100%; padding: 12px; border: 1px solid #ebedf0; border-radius: 8px; font-size: 15px; outline: none; box-sizing: border-box;" />

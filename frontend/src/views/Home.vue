@@ -80,7 +80,7 @@ function winRate(p: RankingEntry) {
     <div class="quick-actions">
       <button class="quick-action qa-match" @click="router.push({ name: 'SessionView', query: { new: '1' } })">
         <IconSwords :size="28" :stroke-width="2" />
-        <span>快速记分</span>
+        <span>快速开局</span>
       </button>
       <button class="quick-action" style="background: linear-gradient(135deg, #e67e22, #f39c12);" @click="router.push({ name: 'HeadToHead' })">
         <IconSwords :size="28" :stroke-width="2" />
