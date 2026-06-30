@@ -23,7 +23,7 @@ let cycleTimer: any = null
 let clickTimeout: any = null
 let cycleCount = 0
 const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
-const labelDivs: HTMLDivElement[] = []
+const nameSprites: { sprite: THREE.Sprite; canvas: HTMLCanvasElement; tex: THREE.CanvasTexture }[] = []
 let radius = 4
 
 function setActive(idx: number) {
@@ -165,12 +165,16 @@ async function init() {
     glow.position.copy(pos)
     scene.add(glow)
 
-    // Label
-    const div = document.createElement('div')
-    div.textContent = p.name
-    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:700;text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;transform:translate(-50%,-50%) translateZ(0);will-change:transform;white-space:nowrap;'
-    container.value!.appendChild(div)
-    labelDivs.push(div)
+    // Name label as Sprite (renders in 3D pipeline, no jitter)
+    const nameCanvas = document.createElement('canvas'); nameCanvas.width = 256; nameCanvas.height = 64
+    const nctx = nameCanvas.getContext('2d')!; nctx.fillStyle = '#ffffff'; nctx.font = 'bold 32px sans-serif'; nctx.textAlign = 'center'; nctx.textBaseline = 'middle'; nctx.fillText(p.name, 128, 32)
+    const nameTex = new THREE.CanvasTexture(nameCanvas); nameTex.minFilter = THREE.LinearFilter
+    const nameMat = new THREE.SpriteMaterial({ map: nameTex, transparent: true, depthTest: false, depthWrite: false })
+    const nameSprite = new THREE.Sprite(nameMat); nameSprite.scale.set(3, 0.75, 1)
+    nameSprite.position.copy(pos.clone().add(new THREE.Vector3(0, 0.6, 0)))
+    nameSprite.renderOrder = 2
+    scene.add(nameSprite)
+    nameSprites.push({ sprite: nameSprite, canvas: nameCanvas, tex: nameTex })
   })
 
   // Straight lines: one per pair
@@ -273,16 +277,21 @@ async function init() {
       }
     })
 
-    // Update labels (round to whole pixels to prevent jitter)
-    const cw = container.value!.clientWidth; const ch = container.value!.clientHeight
-    labelDivs.forEach((div, i) => {
-      const wp = playerObjs[i].pos.clone().project(camera)
-      div.style.left = Math.round((wp.x + 1) / 2 * cw) + 'px'
-      div.style.top = Math.round((-wp.y + 1) / 2 * ch) + 'px'
-      div.style.display = wp.z > 1 || wp.z < -1 ? 'none' : ''
-      div.style.color = i === activeIdx ? '#fff' : '#999'
-      div.style.fontSize = i === activeIdx ? '14px' : '12px'
-      div.style.textShadow = i === activeIdx ? '0 0 6px #000, 0 0 16px #ff6600' : '0 0 4px #000'
+    // Update name sprites (active highlight)
+    nameSprites.forEach((ns, i) => {
+      const active = i === activeIdx
+      const nctx = ns.canvas.getContext('2d')!
+      nctx.clearRect(0, 0, 256, 64)
+      nctx.fillStyle = active ? '#ffffff' : '#999999'
+      nctx.font = active ? 'bold 40px sans-serif' : 'bold 32px sans-serif'
+      nctx.textAlign = 'center'; nctx.textBaseline = 'middle'
+      nctx.fillText(playerObjs[i].name, 128, 32)
+      if (active) {
+        nctx.shadowColor = '#ff6600'; nctx.shadowBlur = 8
+        nctx.fillText(playerObjs[i].name, 128, 32)
+        nctx.shadowBlur = 0
+      }
+      ns.tex.needsUpdate = true
     })
 
     renderer.render(scene, camera)
