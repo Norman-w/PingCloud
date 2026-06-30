@@ -13,7 +13,7 @@ interface H2HPlayer { id: number; name: string; records: { opponent_id: number; 
 let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, raycaster: THREE.Raycaster
 let animId: number
 let camDist = 24, rotY = 0, rotX = 0.4
-let autoRotate = true, isDragging = false, prevX = 0, prevY = 0
+let autoRotate = true, isDragging = false, dragMoved = 0
 let spheres: THREE.Mesh[] = []
 let lineGroups: { line: THREE.Line; dots: THREE.Sprite[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
 let activeIdx = 0
@@ -220,20 +220,21 @@ async function init() {
   setActive(0)
   startCycle()
 
-  // Controls
+  // Controls - use movementX/Y for smooth tracking
   container.value.addEventListener('pointerdown', (e: PointerEvent) => {
-    e.preventDefault(); isDragging = true; prevX = e.clientX; prevY = e.clientY; autoRotate = false
+    e.preventDefault(); isDragging = true; dragMoved = 0; autoRotate = false
+    container.value!.setPointerCapture(e.pointerId)
   })
-  window.addEventListener('pointermove', (e: PointerEvent) => {
+  container.value.addEventListener('pointermove', (e: PointerEvent) => {
     if (!isDragging) return
-    rotY -= (e.clientX - prevX) * 0.005; rotX += (e.clientY - prevY) * 0.005
-    rotX = Math.max(-1.4, Math.min(1.4, rotX)); prevX = e.clientX; prevY = e.clientY
+    rotY -= e.movementX * 0.004; rotX += e.movementY * 0.004
+    rotX = Math.max(-1.4, Math.min(1.4, rotX))
+    dragMoved += Math.abs(e.movementX) + Math.abs(e.movementY)
   })
-  window.addEventListener('pointerup', (e: PointerEvent) => {
+  container.value.addEventListener('pointerup', (e: PointerEvent) => {
     if (!isDragging) return; isDragging = false
-    // Check if it was a click (small movement)
-    const dx = e.clientX - prevX; const dy = e.clientY - prevY
-    if (Math.abs(dx) < 3 && Math.abs(dy) < 3) {
+    container.value!.releasePointerCapture(e.pointerId)
+    if (dragMoved < 5) {
       // Raycaster for sphere click
       const rect = container.value!.getBoundingClientRect()
       const mouse = new THREE.Vector2(
