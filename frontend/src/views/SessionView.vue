@@ -127,6 +127,15 @@ async function createSession() {
 
 function openScoreEditor(match: SessionMatch) { scoringMatch.value = match; showEditDialog.value = true }
 
+async function handleDeleteMatch(matchId: number) {
+  if (!currentSession.value) return
+  try {
+    await fetch(`/api/sessions/${currentSession.value.id}/matches/${matchId}`, { method: 'DELETE' })
+    const detail = await fetch(`/api/sessions/${currentSession.value.id}`).then(r => r.json())
+    currentSession.value = detail
+  } catch (e: any) { showToast('删除失败') }
+}
+
 async function handleForfeit(winnerId: number) {
   if (!scoringMatch.value || !currentSession.value) return
   try {
@@ -351,6 +360,7 @@ function matchIndex(mid: number): number {
           @complete-session="completeSession"
           @back-to-list="backToList"
           @edit-name-start="startEditName"
+          @delete-match="handleDeleteMatch"
         />
         <!-- Name editing (in-play) -->
         <template v-if="editingName">

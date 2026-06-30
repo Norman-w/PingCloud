@@ -246,7 +246,7 @@ func GetSession(w http.ResponseWriter, r *http.Request) {
 		FROM matches m
 		JOIN players pa ON pa.id = m.player_a_id
 		JOIN players pb ON pb.id = m.player_b_id
-		WHERE m.session_id = $1
+		WHERE m.session_id = $1 AND m.deleted = false
 		ORDER BY m.round, m.id
 	`, sessionID)
 	if err != nil {
@@ -358,6 +358,32 @@ func ScoreSessionMatch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func DeleteMatch(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 3 || parts[1] != "matches" {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	sessionID, _ := strconv.Atoi(parts[0])
+	matchID, _ := strconv.Atoi(parts[2])
+
+	// Only allow deleting unplayed matches
+	var scoreA sql.NullInt64
+	db.DB.QueryRow("SELECT score_a FROM matches WHERE id=$1 AND session_id=$2", matchID, sessionID).Scan(&scoreA)
+	if scoreA.Valid {
+		http.Error(w, "已录入比分的比赛不能删除", http.StatusConflict)
+		return
+	}
+
+	_, err := db.DB.Exec("UPDATE matches SET deleted=true WHERE id=$1 AND session_id=$2", matchID, sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
 func ForfeitMatch(w http.ResponseWriter, r *http.Request) {
 	// URL: /api/sessions/{sessionID}/matches/{matchID}/forfeit
 	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
@@ -461,7 +487,7 @@ func CompleteSession(w http.ResponseWriter, r *http.Request) {
 				     WHEN m.player_b_id = p.id THEN m.rating_change_b
 				     ELSE 0 END), 0)
 			FROM matches m
-			WHERE m.session_id = $1 AND m.score_a IS NOT NULL
+			WHERE m.session_id = $1 AND m.deleted = false AND m.score_a IS NOT NULL
 			AND (m.player_a_id = p.id OR m.player_b_id = p.id)
 		) WHERE p.id IN (SELECT player_id FROM session_players WHERE session_id = $1)
 	`, sessionID)

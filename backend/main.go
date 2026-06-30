@@ -79,6 +79,9 @@ func main() {
 			if strings.HasSuffix(path, "/complete") || strings.HasSuffix(path, "complete") { handlers.CompleteSession(w, r); return }
 			if strings.HasSuffix(path, "/players") || strings.Contains(path, "/players") { handlers.AddPlayerToSession(w, r); return }
 			handlers.CreateSession(w, r)
+		case http.MethodDelete:
+			if strings.Contains(path, "/matches/") { handlers.DeleteMatch(w, r); return }
+			http.Error(w, "not found", http.StatusNotFound)
 		case http.MethodPut:
 			if path != "" && !strings.Contains(path, "/") { handlers.UpdateSession(w, r); return }
 			http.Error(w, "not found", http.StatusNotFound)
