@@ -266,7 +266,7 @@ function matchIndex(mid: number): number {
             <input type="checkbox" :checked="selectedIDs.has(p.id)" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #1989fa;" />
             <div style="flex: 1;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }}</div>
-              <div style="font-size: 13px; color: #969799;">{{ sessionDisplayRating(p, currentSession?.matches) }} 分</div>
+              <div style="font-size: 13px; color: #969799;">{{ p.current_rating }} 分</div>
             </div>
           </div>
           <div @click="showAdd = true" style="display: flex; align-items: center; justify-content: center; padding: 14px; color: #1989fa; font-weight: 500; cursor: pointer;">
@@ -315,7 +315,7 @@ function matchIndex(mid: number): number {
           <div style="font-weight: 600; margin-bottom: 12px; font-size: 16px;">{{ sessionName }}</div>
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">
             <span v-for="p in myPlayers()" :key="p.id" style="font-size: 14px; padding: 6px 12px; background: #e8f4ff; color: #1989fa; border-radius: 8px; font-weight: 500;">
-              {{ p.name }} ({{ sessionDisplayRating(p, currentSession?.matches) }})
+              {{ p.name }} ({{ p.current_rating }})
             </span>
           </div>
           <div style="margin-top: 12px; font-size: 13px; color: #969799;">将自动生成循环赛对阵表（每人互相打一场）</div>
