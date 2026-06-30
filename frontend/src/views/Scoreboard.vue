@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 
+// Pre-fill names from URL params
 const started = ref(false)
-const nameA = ref(''); const nameB = ref('')
+const nameA = ref((route.query.a as string) || '')
+const nameB = ref((route.query.b as string) || '')
 const format = ref<'11' | 'golden' | '7'>('11')
 const gamesToWin = ref(3)
 const firstServer = ref<'A' | 'B'>('A')

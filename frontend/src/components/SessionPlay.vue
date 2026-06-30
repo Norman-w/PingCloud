@@ -61,9 +61,12 @@ const emit = defineEmits<{
     </div>
 
     <!-- Match list -->
-    <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;gap:6px;">
-      <IconList :size="18" :stroke-width="2" style="vertical-align:-3px;" />
-      对阵表
+    <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;justify-content:space-between;">
+      <span>
+        <IconList :size="18" :stroke-width="2" style="vertical-align:-3px;" />
+        对阵表
+      </span>
+      <a :href="`/#/scoreboard?a=${encodeURIComponent(session.players[0]?.name||'')}&b=${encodeURIComponent(session.players[1]?.name||'')}`" style="text-decoration:none;font-size:12px;color:#1989fa;background:#e8f4ff;padding:4px 10px;border-radius:8px;font-weight:600;" target="_blank">记分牌 ▸</a>
     </div>
     <div style="background:#fff;border-radius:12px;margin:4px 16px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;">
       <div v-for="(m,mi) in session.matches" :key="m.id"
