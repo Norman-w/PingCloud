@@ -168,7 +168,7 @@ async function init() {
     // Label
     const div = document.createElement('div')
     div.textContent = p.name
-    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:700;text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;transform:translate(-50%,-50%);white-space:nowrap;'
+    div.style.cssText = 'position:absolute;color:#fff;font-size:12px;font-weight:700;text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;transform:translate(-50%,-50%) translateZ(0);will-change:transform;white-space:nowrap;'
     container.value!.appendChild(div)
     labelDivs.push(div)
   })
@@ -273,11 +273,12 @@ async function init() {
       }
     })
 
-    // Update labels
+    // Update labels (round to whole pixels to prevent jitter)
+    const cw = container.value!.clientWidth; const ch = container.value!.clientHeight
     labelDivs.forEach((div, i) => {
       const wp = playerObjs[i].pos.clone().project(camera)
-      div.style.left = ((wp.x + 1) / 2 * renderer.domElement.clientWidth) + 'px'
-      div.style.top = ((-wp.y + 1) / 2 * renderer.domElement.clientHeight) + 'px'
+      div.style.left = Math.round((wp.x + 1) / 2 * cw) + 'px'
+      div.style.top = Math.round((-wp.y + 1) / 2 * ch) + 'px'
       div.style.display = wp.z > 1 || wp.z < -1 ? 'none' : ''
       div.style.color = i === activeIdx ? '#fff' : '#999'
       div.style.fontSize = i === activeIdx ? '14px' : '12px'
