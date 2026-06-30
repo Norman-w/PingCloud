@@ -140,6 +140,15 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]int{"id": sessionID})
 }
 
+func DeleteSession(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	parts := strings.Split(path, "/")
+	sessionID, _ := strconv.Atoi(parts[0])
+	_, err := db.DB.Exec("UPDATE sessions SET deleted=true WHERE id=$1", sessionID)
+	if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
 func GetSessions(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`
 		SELECT s.id, s.name, s.status, s.created_at,
@@ -149,6 +158,7 @@ func GetSessions(w http.ResponseWriter, r *http.Request) {
 		FROM sessions s
 		LEFT JOIN session_players sp ON sp.session_id = s.id
 		LEFT JOIN matches m ON m.session_id = s.id
+		WHERE s.deleted = false
 		GROUP BY s.id
 		ORDER BY s.created_at DESC LIMIT 20
 	`)

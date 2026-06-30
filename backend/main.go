@@ -81,6 +81,7 @@ func main() {
 			handlers.CreateSession(w, r)
 		case http.MethodDelete:
 			if strings.Contains(path, "/matches/") { handlers.DeleteMatch(w, r); return }
+			if path != "" && !strings.Contains(path, "/") { handlers.DeleteSession(w, r); return }
 			http.Error(w, "not found", http.StatusNotFound)
 		case http.MethodPut:
 			if path != "" && !strings.Contains(path, "/") { handlers.UpdateSession(w, r); return }

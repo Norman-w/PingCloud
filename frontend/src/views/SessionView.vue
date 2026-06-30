@@ -136,6 +136,13 @@ async function handleDeleteMatch(matchId: number) {
   } catch (e: any) { showToast('删除失败') }
 }
 
+async function handleDeleteSession(sessionId: number) {
+  try {
+    await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+    await loadAll()
+  } catch (e: any) { showToast('删除失败') }
+}
+
 async function handleForfeit(winnerId: number) {
   if (!scoringMatch.value || !currentSession.value) return
   try {
@@ -253,6 +260,7 @@ function matchIndex(mid: number): number {
                 {{ s.status === 'completed' ? '已结束' : `剩${s.unplayed_count || 0}场` }}
               </span>
               <IconChevronRight :size="16" :stroke-width="2" style="color: #c8c9cc;" />
+              <span @click.stop="handleDeleteSession(s.id)" style="font-size:12px;color:#c8c9cc;cursor:pointer;margin-left:4px;" title="删除活动">✕</span>
             </div>
           </div>
         </div>

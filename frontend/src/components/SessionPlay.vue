@@ -71,11 +71,11 @@ const emit = defineEmits<{
         @click="emit('openScoreEditor', m)"
         style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #f5f5f5;cursor:pointer;">
         <span style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;min-width:40px;">
-          <a :href="`/#/scoreboard?a=${encodeURIComponent(m.player_a_name)}&b=${encodeURIComponent(m.player_b_name)}`" target="_blank" style="text-decoration:none;font-size:12px;font-weight:700;color:#1989fa;line-height:1;" @click.stop title="记分牌">
-            ?:?
+          <a :href="`/#/scoreboard?a=${encodeURIComponent(m.player_a_name)}&b=${encodeURIComponent(m.player_b_name)}`" target="_blank"
+            style="text-decoration:none;display:flex;align-items:center;justify-content:center;width:40px;height:22px;background:#111;border:1px solid #333;border-radius:5px;font-size:11px;font-weight:700;color:#1989fa;font-family:monospace;" @click.stop title="记分牌">
+            0:0
           </a>
           <span style="font-size:12px;color:#c8c9cc;">#{{ mi+1 }}</span>
-          <span v-if="!m.played" @click.stop="emit('deleteMatch', m.id)" style="font-size:10px;color:#e74c3c;cursor:pointer;margin-top:1px;" title="删除">✕</span>
         </span>
         <div style="flex:1;text-align:right;font-weight:400;" :style="{fontWeight:m.winner_id===m.player_a_id?700:400}">
           <span style="font-size:10px;color:#c8c9cc;">{{ mi+1 }}号</span> {{ m.player_a_name }}
