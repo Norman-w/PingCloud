@@ -10,7 +10,7 @@ const started = ref(false)
 const nameA = ref((route.query.a as string) || '')
 const nameB = ref((route.query.b as string) || '')
 const format = ref<'11' | 'golden' | '7'>('11')
-const gamesToWin = ref(3)
+const gamesToWin = ref(2)
 const firstServer = ref<'A' | 'B'>('A')
 
 const pointA = ref(0); const pointB = ref(0)
@@ -141,11 +141,16 @@ function exitScoreboard() { clearInterval(timer); if (document.fullscreenElement
 
   <!-- SETUP -->
   <div v-if="!started" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:20px;">
+    <!-- Back button -->
+    <button @click="router.back()" style="position:absolute;top:16px;left:16px;background:rgba(255,255,255,0.1);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;cursor:pointer;">&#8592; 返回</button>
     <div style="font-size:28px;font-weight:900;">记分牌</div>
-    <div style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:14px;">
-      <input v-model="nameA" placeholder="选手A" style="padding:14px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
-      <div style="text-align:center;color:#666;font-size:20px;">VS</div>
-      <input v-model="nameB" placeholder="选手B" style="padding:14px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
+    <div style="width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;">
+      <!-- Names side by side -->
+      <div style="display:flex;gap:12px;align-items:center;">
+        <input v-model="nameA" placeholder="选手A" style="flex:1;padding:14px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
+        <span style="color:#666;font-size:20px;font-weight:900;">VS</span>
+        <input v-model="nameB" placeholder="选手B" style="flex:1;padding:14px;background:#111;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;text-align:center;outline:none;">
+      </div>
       <div style="font-size:13px;color:#aaa;text-align:center;">先手发球</div>
       <div style="display:flex;gap:8px;">
         <button @click="firstServer='A'" style="flex:1;padding:12px;border-radius:10px;border:2px solid;font-size:15px;font-weight:600;cursor:pointer;" :style="firstServer==='A'?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'transparent',color:'#666',borderColor:'#333'}">{{nameA||'选手A'}} 先发</button>
