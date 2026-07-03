@@ -55,6 +55,11 @@ function buildLinesForPlayer(idx: number) {
     const winRate = r.wins / total
     if (Math.abs(winRate - 0.5) < 0.01) return
 
+    // 克制模式: 只显示当前玩家克制谁 (winRate > 0.5, active player is winner)
+    // 福星模式: 只显示谁是当前玩家的福星 (winRate < 0.5, active player is loser)
+    if (mode === 'dominate' && winRate < 0.5) return
+    if (mode === 'feed' && winRate > 0.5) return
+
     const wIdx = winRate > 0.5 ? idx : j
     const lIdx = winRate > 0.5 ? j : idx
     const wPos = playerObjs[wIdx].pos.clone()
@@ -288,8 +293,30 @@ async function init() {
   })
 }
 
-onMounted(() => init())
-onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout); clearLines() })
+onMounted(() => { try { init() } catch(e: any) { error.value = '加载失败: ' + String(e); loading.value = false } })
+onUnmounted(() => {
+  cancelAnimationFrame(animId)
+  clearInterval(cycleTimer)
+  clearTimeout(clickTimeout)
+  clearLines()
+  // Dispose all spheres
+  spheres.forEach(s => { s.geometry.dispose(); (s.material as THREE.MeshStandardMaterial).dispose() })
+  spheres = []
+  // Dispose name sprites
+  nameSprites.forEach(ns => { ns.tex.dispose(); (ns.sprite.material as THREE.SpriteMaterial).dispose(); scene?.remove(ns.sprite) })
+  nameSprites.length = 0
+  // Dispose glow meshes
+  scene?.children.filter(c => c.type === 'Mesh' && (c as THREE.Mesh).geometry.type === 'SphereGeometry').forEach(m => {
+    const mesh = m as THREE.Mesh
+    if (mesh.material instanceof THREE.MeshBasicMaterial && mesh.material.opacity < 0.3) {
+      mesh.geometry.dispose(); mesh.material.dispose()
+    }
+  })
+  scene?.clear()
+  renderer?.dispose()
+  renderer = null!
+  scene = null!
+})
 </script>
 
 <template>

@@ -137,6 +137,62 @@ func main() {
 		}
 	})
 
+	// Admin routes
+	mux.HandleFunc("/api/admin/login", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPost { handlers.AdminLogin(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/admin/logout", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPost { handlers.AdminLogout(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/admin/me", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.AdminMe(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/admin/logs", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.AdminGetLogs(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/admin/users/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodPut: handlers.AdminUpdateUserV2(w, r)
+		case http.MethodDelete: handlers.AdminDeleteUser(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/admin/users", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.AdminListUsers(w, r)
+		case http.MethodPost: handlers.AdminCreateUserV2(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/admin/groups", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.AdminListGroups(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/admin/rating", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPost { handlers.AdminAdjustRating(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))

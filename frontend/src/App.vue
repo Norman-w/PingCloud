@@ -18,6 +18,11 @@ const active = computed(() => {
   return tabs.find(t => t.name === name) ? name : ''
 })
 
+const hideTabbar = computed(() => {
+  const n = route.name as string
+  return n === 'Admin' || n === 'AdminLogin'
+})
+
 function onTabChange(name: string) {
   router.push({ name })
 }
@@ -28,7 +33,7 @@ function onTabChange(name: string) {
     <div class="app-body">
       <router-view />
     </div>
-    <nav class="tabbar">
+    <nav v-if="!hideTabbar" class="tabbar">
       <button
         v-for="tab in tabs"
         :key="tab.name"
