@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const router = useRouter()
 const container = ref<HTMLElement>()
@@ -12,9 +13,7 @@ interface H2HPlayer { id: number; name: string; gender: string; records: { oppon
 
 let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, raycaster: THREE.Raycaster
 let animId: number
-let camDist = 24, rotY = 0, rotX = 0.4
-let autoRotate = true, isDragging = false, dragMoved = 0
-let vRotY = 0, vRotX = 0, inertiaOn = false
+let controls: OrbitControls
 let spheres: THREE.Mesh[] = []
 let lineGroups: { line: THREE.Line; dots: THREE.Sprite[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
 let activeIdx = 0
@@ -102,8 +101,8 @@ function onPlayerClick(idx: number) {
   clearTimeout(clickTimeout)
   clearInterval(cycleTimer)
   setActive(idx)
-  autoRotate = false
-  clickTimeout = setTimeout(() => { autoRotate = true; startCycle() }, 8000)
+  controls.autoRotate = false
+  clickTimeout = setTimeout(() => { controls.autoRotate = true; startCycle() }, 8000)
 }
 
 function startCycle() {
@@ -140,13 +139,24 @@ async function init() {
   scene.fog = new THREE.Fog(0x0a0a1a, 15, 50)
 
   camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100)
-  camera.position.set(0, 2, camDist)
-  camera.lookAt(0, 0, 0)
+  camera.position.set(0, 2, 24)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(W, H)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   container.value.appendChild(renderer.domElement)
+
+  // OrbitControls: built-in damping (inertia), proper pole handling, no custom rotation code
+  controls = new OrbitControls(camera, renderer.domElement)
+  controls.target.set(0, 0, 0)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.08
+  controls.autoRotate = true
+  controls.autoRotateSpeed = 0.4
+  controls.minDistance = 14
+  controls.maxDistance = 40
+  controls.enablePan = false
+  controls.update()
 
   raycaster = new THREE.Raycaster()
 
@@ -209,37 +219,15 @@ async function init() {
   startCycle()
 
   // Controls - use movementX/Y for smooth tracking
-  // Velocity history for inertia
-  let moveHistory: {dx:number,dy:number,ts:number}[] = []
-
+  // Click detection for sphere selection (OrbitControls handles drag/zoom/inertia)
+  let pointerDownPos = {x:0,y:0}
   container.value.addEventListener('pointerdown', (e: PointerEvent) => {
-    e.preventDefault(); isDragging = true; dragMoved = 0; autoRotate = false; inertiaOn = false
-    vRotY = 0; vRotX = 0; moveHistory = []
-    container.value!.setPointerCapture(e.pointerId)
-  })
-  container.value.addEventListener('pointermove', (e: PointerEvent) => {
-    if (!isDragging) return
-    rotY -= e.movementX * 0.004; rotX += e.movementY * 0.004
-    rotX = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, rotX))
-    dragMoved += Math.abs(e.movementX) + Math.abs(e.movementY)
-    moveHistory.push({dx: e.movementX, dy: e.movementY, ts: Date.now()})
-    if (moveHistory.length > 5) moveHistory.shift()
+    pointerDownPos = {x: e.clientX, y: e.clientY}
   })
   container.value.addEventListener('pointerup', (e: PointerEvent) => {
-    if (!isDragging) return; isDragging = false
-    container.value!.releasePointerCapture(e.pointerId)
-    // Compute inertia velocity from recent movement
-    if (moveHistory.length >= 2 && dragMoved > 5) {
-      const first = moveHistory[0]; const last = moveHistory[moveHistory.length-1]
-      const dt = last.ts - first.ts
-      if (dt > 0) {
-        vRotY = -moveHistory.reduce((s,m)=>s+m.dx,0) / dt * 16 * 0.004
-        vRotX = moveHistory.reduce((s,m)=>s+m.dy,0) / dt * 16 * 0.004
-        if (Math.abs(vRotY) > 0.00001 || Math.abs(vRotX) > 0.00001) inertiaOn = true
-      }
-    }
-    if (dragMoved < 5) {
-      // Raycaster for sphere click
+    const dx = e.clientX - pointerDownPos.x
+    const dy = e.clientY - pointerDownPos.y
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
       const rect = container.value!.getBoundingClientRect()
       const mouse = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -252,27 +240,11 @@ async function init() {
         if (idx !== undefined) onPlayerClick(idx)
       }
     }
-    if (!inertiaOn) setTimeout(() => { if (!isDragging) autoRotate = true }, 2000)
   })
-  container.value.addEventListener('wheel', (e: WheelEvent) => {
-    e.preventDefault(); camDist += e.deltaY * 0.04; camDist = Math.max(14, Math.min(40, camDist))
-  }, { passive: false })
 
   function animate() {
     animId = requestAnimationFrame(animate)
-    if (inertiaOn) {
-      rotY += vRotY; rotX += vRotX
-      rotX = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, rotX))
-      vRotY *= 0.95; vRotX *= 0.95
-      if (Math.abs(vRotY) < 0.00001 && Math.abs(vRotX) < 0.00001) { inertiaOn = false; autoRotate = true }
-    } else if (autoRotate) {
-      rotY += 0.002
-    }
-
-    camera.position.x = camDist * Math.cos(rotX) * Math.sin(rotY)
-    camera.position.y = camDist * Math.sin(rotX)
-    camera.position.z = camDist * Math.cos(rotX) * Math.cos(rotY)
-    camera.lookAt(0, 0, 0)
+    controls.update()
 
     // Update dots
     scene.children.forEach(c => {
@@ -313,7 +285,7 @@ async function init() {
 }
 
 onMounted(() => init())
-onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout); clearLines() })
+onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout); clearLines(); controls?.dispose() })
 </script>
 
 <template>
