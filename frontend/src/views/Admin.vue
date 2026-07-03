@@ -7,7 +7,7 @@ import { api, type Player } from '../api'
 const router = useRouter()
 
 interface Perms { manage_admins: boolean; manage_players: boolean; manage_sessions: boolean; manage_funmatch: boolean; score_matches: boolean; edit_ratings: boolean; view_logs: boolean; view_data: boolean; participate: boolean }
-interface AdminUser { id: number; username: string; display_name: string; role: string; group_id: number; group_name: string; permissions: Perms; created_at: string }
+interface AdminUser { id: number; username: string; display_name: string; role: string; group_id: number; group_name: string; player_id: number; player_name: string; created_by: string; updated_by: string; permissions: Perms; created_at: string }
 interface AdminGroup { id: number; name: string; description: string; permissions: Perms }
 interface LogEntry { id: number; admin_id: number; admin_name: string; action: string; target_type: string; target_id: number; detail: string; ip: string; created_at: string }
 
@@ -21,6 +21,8 @@ const tab = ref<'users' | 'logs' | 'rating'>('users')
 const showDialog = ref(false)
 const editUser = ref<AdminUser | null>(null)
 const formUser = ref(''); const formPass = ref(''); const formName = ref(''); const formGroup = ref(4)
+const formPlayerId = ref(0)
+const playerSearch = ref('')
 
 const showRating = ref(false)
 const ratingPlayerId = ref(0)
@@ -46,23 +48,26 @@ onMounted(async () => {
     const r = await fetch('/api/admin/me', { credentials: 'include' })
     if (!r.ok) { router.replace('/admin/login'); return }
     me.value = await r.json()
-    await Promise.all([loadUsers(), loadLogs(), loadGroups()])
-    if (me.value?.permissions.edit_ratings) {
-      try { players.value = await api.getPlayers() } catch {}
-    }
+    await Promise.all([loadUsers(), loadLogs(), loadGroups(), loadPlayers()])
   } catch { router.replace('/admin/login') }
 })
+
+async function loadPlayers() { try { players.value = await api.getPlayers() } catch {} }
 
 async function loadUsers() { try { const r = await fetch('/api/admin/users', { credentials: 'include' }); if (r.ok) users.value = await r.json() } catch {} }
 async function loadLogs() { try { const r = await fetch('/api/admin/logs', { credentials: 'include' }); if (r.ok) logs.value = await r.json() } catch {} }
 async function loadGroups() { try { const r = await fetch('/api/admin/groups', { credentials: 'include' }); if (r.ok) groups.value = await r.json() } catch {} }
 
 function openCreate() {
-  editUser.value = null; formUser.value = ''; formPass.value = ''; formName.value = ''; formGroup.value = 4
+  editUser.value = null; formUser.value = ''; formPass.value = ''; formName.value = ''; formGroup.value = 4; formPlayerId.value = 0; playerSearch.value = ''
+  showDialog.value = true
+}
+function openCreateForPlayer(p: Player) {
+  editUser.value = null; formUser.value = p.name.toLowerCase().replace(/\s/g,''); formPass.value = ''; formName.value = p.name; formGroup.value = 4; formPlayerId.value = p.id; playerSearch.value = p.name
   showDialog.value = true
 }
 function openEdit(u: AdminUser) {
-  editUser.value = u; formUser.value = u.username; formPass.value = ''; formName.value = u.display_name; formGroup.value = u.group_id || 4
+  editUser.value = u; formUser.value = u.username; formPass.value = ''; formName.value = u.display_name; formGroup.value = u.group_id || 4; formPlayerId.value = u.player_id || 0; playerSearch.value = u.player_name || ''
   showDialog.value = true
 }
 async function saveUser() {
@@ -76,7 +81,7 @@ async function saveUser() {
     } else {
       await fetch('/api/admin/users', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: formUser.value, password: formPass.value, display_name: formName.value, group_id: formGroup.value }),
+        body: JSON.stringify({ username: formUser.value, password: formPass.value, display_name: formName.value, group_id: formGroup.value, player_id: formPlayerId.value }),
         credentials: 'include',
       })
     }
@@ -136,45 +141,54 @@ async function logout() {
 
     <!-- ===== 操作人员 ===== -->
     <div v-if="tab==='users'" style="padding:12px 16px;">
-      <!-- 权限组说明 -->
-      <div v-if="groups.length" style="margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:600;color:#666;margin-bottom:6px;">权限组</div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          <div v-for="g in groups" :key="g.id" style="background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;" @click="formGroup=g.id">
+      <!-- 权限组说明（折叠） -->
+      <details v-if="groups.length" style="margin-bottom:12px;background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <summary style="font-weight:600;font-size:14px;cursor:pointer;">查看权限组说明</summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+          <div v-for="g in groups" :key="g.id" style="background:#f8f9fa;border-radius:8px;padding:8px 10px;">
             <div style="display:flex;align-items:center;justify-content:space-between;">
-              <span style="font-weight:600;font-size:14px;">{{ g.name }}</span>
-              <span style="font-size:11px;color:#c8c9cc;">{{ g.description || '' }}</span>
+              <span style="font-weight:600;font-size:13px;">{{ g.name }}</span>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
               <span v-for="k in permKeys.filter(pk => g.permissions[pk])" :key="k"
-                style="font-size:10px;padding:1px 6px;border-radius:6px;background:#e8f4ff;color:#1989fa;">
-                {{ permLabels[k] }}</span>
-              <span v-if="permKeys.filter(pk=>g.permissions[pk]).length===0" style="font-size:10px;color:#ccc;">无特殊权限</span>
+                style="font-size:10px;padding:1px 6px;border-radius:6px;background:#e8f8ef;color:#07c160;">✓ {{ permLabels[k] }}</span>
             </div>
           </div>
         </div>
+      </details>
+
+      <!-- Top bar -->
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input v-model="playerSearch" placeholder="搜索球员..." style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;background:#fff;" />
+        <button v-if="me?.permissions.manage_admins" @click="openCreate" style="padding:10px 14px;background:#1989fa;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+          <IconPlus :size="16" style="vertical-align:-3px;" /> 新建账号</button>
       </div>
 
-      <div v-if="me?.permissions.manage_admins" style="margin-bottom:12px;">
-        <button @click="openCreate" style="width:100%;padding:12px;background:#1989fa;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
-          <IconPlus :size="18" /> 添加操作人员</button>
-      </div>
-
+      <!-- All players with admin status -->
       <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-        <div v-for="u in users" :key="u.id"
-          style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #f5f5f5;">
+        <div v-for="p in players.filter(p=>!playerSearch||p.name.includes(playerSearch))" :key="p.id"
+          style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #f5f5f5;">
           <div style="flex:1;">
-            <div style="font-size:15px;font-weight:500;">{{ u.display_name || u.username }}</div>
-            <div style="font-size:12px;color:#969799;">账号 {{ u.username }} · {{ u.group_name || '未分组' }} · {{ u.created_at?.slice(0,10) }}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px;">
-              <span v-for="k in permKeys.filter(pk => u.permissions[pk])" :key="k"
-                style="font-size:9px;padding:1px 5px;border-radius:5px;background:#f0f2f5;color:#999;">
-                {{ permLabels[k] }}</span>
+            <div style="font-size:15px;font-weight:500;">{{ p.name }}</div>
+            <div style="font-size:12px;color:#969799;">
+              {{ p.current_rating }}分 · 开球网{{ p.reference_rating || '-' }}
+              <!-- Admin linkage info -->
+              <template v-for="u in users.filter(a=>a.player_id===p.id)" :key="u.id">
+                <span :style="{color:'#1989fa'}"> · {{ u.group_name }}</span>
+                <span v-if="u.created_by" style="color:#999;"> · {{ u.created_by }}添加</span>
+              </template>
             </div>
           </div>
+          <!-- Action: grant/edit/remove admin -->
           <template v-if="me?.permissions.manage_admins">
-            <button @click="openEdit(u)" style="background:none;border:none;color:#1989fa;cursor:pointer;padding:6px;margin-left:4px;"><IconEdit :size="16" /></button>
-            <button @click="deleteUser(u)" style="background:none;border:none;color:#e74c3c;cursor:pointer;padding:6px;"><IconTrash :size="16" /></button>
+            <template v-for="u in users.filter(a=>a.player_id===p.id)" :key="u.id">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;color:#999;">账号 {{ u.username }}</span>
+                <button @click="openEdit(u)" style="background:none;border:none;color:#1989fa;cursor:pointer;padding:4px;" title="修改权限"><IconEdit :size="16" /></button>
+                <button @click="deleteUser(u)" style="background:none;border:none;color:#e74c3c;cursor:pointer;padding:4px;" title="撤销权限"><IconTrash :size="16" /></button>
+              </div>
+            </template>
+            <button v-if="!users.some(a=>a.player_id===p.id)" @click="openCreateForPlayer(p)" style="font-size:12px;padding:5px 12px;border-radius:8px;background:#e8f4ff;color:#1989fa;border:1px solid #1989fa;cursor:pointer;font-weight:600;white-space:nowrap;">赋予权限</button>
           </template>
         </div>
       </div>
@@ -220,17 +234,45 @@ async function logout() {
       <div style="background:#fff;border-radius:16px;padding:24px;width:340px;max-height:80vh;overflow-y:auto;">
         <h3 style="margin-bottom:16px;">{{ editUser ? '修改操作人员' : '添加操作人员' }}</h3>
 
-        <div v-if="!editUser" style="margin-bottom:10px;">
+        <div v-if="editUser" style="margin-bottom:10px;padding:8px 12px;background:#f8f9fa;border-radius:8px;">
+          <div style="font-size:12px;color:#969799;">登录账号</div>
+          <div style="font-size:14px;font-weight:600;">{{ editUser.username }}</div>
+        </div>
+        <div v-else style="margin-bottom:10px;">
           <div style="font-size:13px;color:#969799;margin-bottom:4px;">登录账号</div>
           <input v-model="formUser" placeholder="英文或拼音" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;" />
         </div>
-        <div style="margin-bottom:10px;">
-          <div style="font-size:13px;color:#969799;margin-bottom:4px;">{{ editUser?'新密码（不填不修改）':'登录密码' }}</div>
-          <input v-model="formPass" :placeholder="editUser?'留空则不修改':'至少6位'" type="password" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;" />
+        <div v-if="!editUser" style="margin-bottom:10px;">
+          <div style="font-size:13px;color:#969799;margin-bottom:4px;">登录密码</div>
+          <input v-model="formPass" placeholder="至少6位" type="password" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;" />
         </div>
         <div style="margin-bottom:10px;">
           <div style="font-size:13px;color:#969799;margin-bottom:4px;">显示名称</div>
           <input v-model="formName" placeholder="中文名或昵称" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;" />
+        </div>
+
+        <!-- Bound player (edit mode: show, create mode: searchable) -->
+        <div v-if="editUser && editUser.player_name" style="margin-bottom:10px;padding:8px 12px;background:#e8f4ff;border-radius:8px;">
+          <div style="font-size:12px;color:#969799;">绑定球员</div>
+          <div style="font-size:14px;font-weight:600;color:#1989fa;">🏓 {{ editUser.player_name }}</div>
+        </div>
+        <div v-else-if="!editUser" style="margin-bottom:12px;">
+          <div style="font-size:13px;color:#969799;margin-bottom:4px;">绑定球员 <span style="font-size:11px;color:#ccc;">(选填)</span></div>
+          <div v-if="formPlayerId > 0" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#e8f4ff;border-radius:8px;margin-bottom:4px;">
+            <span style="font-size:14px;font-weight:600;color:#1989fa;">🏓 {{ playerSearch }}</span>
+            <button @click="formPlayerId=0;playerSearch=''" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px;">✕</button>
+          </div>
+          <div v-else style="position:relative;">
+            <input v-model="playerSearch" placeholder="搜索球员姓名..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;" />
+            <div v-if="playerSearch && players.filter(p=>p.name.includes(playerSearch)).length>0" style="position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #eee;border-radius:8px;max-height:150px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+              <div v-for="p in players.filter(p=>p.name.includes(playerSearch)).slice(0,8)" :key="p.id"
+                @click="formPlayerId=p.id;playerSearch=p.name"
+                style="padding:8px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid #f5f5f5;"
+                :style="{background:'#fff'}">
+                {{ p.name }} <span style="color:#999;font-size:12px;">{{ p.current_rating }}分</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div style="margin-bottom:12px;">

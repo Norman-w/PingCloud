@@ -14,6 +14,7 @@ let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRe
 let animId: number
 let camDist = 24, rotY = 0, rotX = 0.4
 let autoRotate = true, isDragging = false, dragMoved = 0
+let vRotY = 0, vRotX = 0, inertiaOn = false
 let spheres: THREE.Mesh[] = []
 let lineGroups: { line: THREE.Line; dots: THREE.Sprite[]; winnerIdx: number; loserIdx: number; winnerPos: THREE.Vector3; loserPos: THREE.Vector3; intensity: number }[] = []
 let activeIdx = 0
@@ -54,11 +55,6 @@ function buildLinesForPlayer(idx: number) {
     const total = r.wins + r.losses
     const winRate = r.wins / total
     if (Math.abs(winRate - 0.5) < 0.01) return
-
-    // 克制模式: 只显示当前玩家克制谁 (winRate > 0.5, active player is winner)
-    // 福星模式: 只显示谁是当前玩家的福星 (winRate < 0.5, active player is loser)
-    if (mode === 'dominate' && winRate < 0.5) return
-    if (mode === 'feed' && winRate > 0.5) return
 
     const wIdx = winRate > 0.5 ? idx : j
     const lIdx = winRate > 0.5 ? j : idx
@@ -213,19 +209,35 @@ async function init() {
   startCycle()
 
   // Controls - use movementX/Y for smooth tracking
+  // Velocity history for inertia
+  let moveHistory: {dx:number,dy:number,ts:number}[] = []
+
   container.value.addEventListener('pointerdown', (e: PointerEvent) => {
-    e.preventDefault(); isDragging = true; dragMoved = 0; autoRotate = false
+    e.preventDefault(); isDragging = true; dragMoved = 0; autoRotate = false; inertiaOn = false
+    vRotY = 0; vRotX = 0; moveHistory = []
     container.value!.setPointerCapture(e.pointerId)
   })
   container.value.addEventListener('pointermove', (e: PointerEvent) => {
     if (!isDragging) return
     rotY -= e.movementX * 0.004; rotX += e.movementY * 0.004
-    rotX = Math.max(-1.4, Math.min(1.4, rotX))
+    rotX = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, rotX))
     dragMoved += Math.abs(e.movementX) + Math.abs(e.movementY)
+    moveHistory.push({dx: e.movementX, dy: e.movementY, ts: Date.now()})
+    if (moveHistory.length > 5) moveHistory.shift()
   })
   container.value.addEventListener('pointerup', (e: PointerEvent) => {
     if (!isDragging) return; isDragging = false
     container.value!.releasePointerCapture(e.pointerId)
+    // Compute inertia velocity from recent movement
+    if (moveHistory.length >= 2 && dragMoved > 5) {
+      const first = moveHistory[0]; const last = moveHistory[moveHistory.length-1]
+      const dt = last.ts - first.ts
+      if (dt > 0) {
+        vRotY = -moveHistory.reduce((s,m)=>s+m.dx,0) / dt * 16 * 0.004
+        vRotX = moveHistory.reduce((s,m)=>s+m.dy,0) / dt * 16 * 0.004
+        if (Math.abs(vRotY) > 0.00001 || Math.abs(vRotX) > 0.00001) inertiaOn = true
+      }
+    }
     if (dragMoved < 5) {
       // Raycaster for sphere click
       const rect = container.value!.getBoundingClientRect()
@@ -240,7 +252,7 @@ async function init() {
         if (idx !== undefined) onPlayerClick(idx)
       }
     }
-    setTimeout(() => { if (!isDragging) autoRotate = true }, 2000)
+    if (!inertiaOn) setTimeout(() => { if (!isDragging) autoRotate = true }, 2000)
   })
   container.value.addEventListener('wheel', (e: WheelEvent) => {
     e.preventDefault(); camDist += e.deltaY * 0.04; camDist = Math.max(14, Math.min(40, camDist))
@@ -248,7 +260,14 @@ async function init() {
 
   function animate() {
     animId = requestAnimationFrame(animate)
-    if (autoRotate) rotY += 0.002
+    if (inertiaOn) {
+      rotY += vRotY; rotX += vRotX
+      rotX = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, rotX))
+      vRotY *= 0.95; vRotX *= 0.95
+      if (Math.abs(vRotY) < 0.00001 && Math.abs(vRotX) < 0.00001) { inertiaOn = false; autoRotate = true }
+    } else if (autoRotate) {
+      rotY += 0.002
+    }
 
     camera.position.x = camDist * Math.cos(rotX) * Math.sin(rotY)
     camera.position.y = camDist * Math.sin(rotX)
@@ -293,30 +312,8 @@ async function init() {
   })
 }
 
-onMounted(() => { try { init() } catch(e: any) { error.value = '加载失败: ' + String(e); loading.value = false } })
-onUnmounted(() => {
-  cancelAnimationFrame(animId)
-  clearInterval(cycleTimer)
-  clearTimeout(clickTimeout)
-  clearLines()
-  // Dispose all spheres
-  spheres.forEach(s => { s.geometry.dispose(); (s.material as THREE.MeshStandardMaterial).dispose() })
-  spheres = []
-  // Dispose name sprites
-  nameSprites.forEach(ns => { ns.tex.dispose(); (ns.sprite.material as THREE.SpriteMaterial).dispose(); scene?.remove(ns.sprite) })
-  nameSprites.length = 0
-  // Dispose glow meshes
-  scene?.children.filter(c => c.type === 'Mesh' && (c as THREE.Mesh).geometry.type === 'SphereGeometry').forEach(m => {
-    const mesh = m as THREE.Mesh
-    if (mesh.material instanceof THREE.MeshBasicMaterial && mesh.material.opacity < 0.3) {
-      mesh.geometry.dispose(); mesh.material.dispose()
-    }
-  })
-  scene?.clear()
-  renderer?.dispose()
-  renderer = null!
-  scene = null!
-})
+onMounted(() => init())
+onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout); clearLines() })
 </script>
 
 <template>

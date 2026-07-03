@@ -45,6 +45,10 @@ type AdminUser struct {
 	Role        string      `json:"role"`
 	GroupID     int         `json:"group_id"`
 	GroupName   string      `json:"group_name"`
+	PlayerID    int         `json:"player_id"`
+	PlayerName  string      `json:"player_name"`
+	CreatedBy   string      `json:"created_by"`
+	UpdatedBy   string      `json:"updated_by"`
 	Permissions Permissions `json:"permissions"`
 	CreatedAt   string      `json:"created_at"`
 }
@@ -105,7 +109,7 @@ func loadAdminUser(row interface{ Scan(...interface{}) error }) AdminUser {
 	var u AdminUser
 	var gid int
 	var gname string
-	row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &gid, &gname, &u.CreatedAt)
+	row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &gid, &gname, &u.PlayerID, &u.PlayerName, &u.CreatedBy, &u.UpdatedBy, &u.CreatedAt)
 	u.GroupID = gid
 	u.GroupName = gname
 	u.Permissions = loadPermissions(gid)
@@ -213,9 +217,16 @@ func AdminListUsers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.DB.Query(`
 		SELECT au.id, au.username, COALESCE(au.display_name,''), au.role,
-			COALESCE(au.group_id,0), COALESCE(ag.name,''), au.created_at
+			COALESCE(au.group_id,0), COALESCE(ag.name,''),
+			COALESCE(au.player_id,0), COALESCE(p.name,''),
+			COALESCE(cu.display_name, cu.username),
+			COALESCE(uu.display_name, uu.username),
+			au.created_at
 		FROM admin_users au
 		LEFT JOIN admin_groups ag ON ag.id = au.group_id
+		LEFT JOIN players p ON p.id = au.player_id
+		LEFT JOIN admin_users cu ON cu.id = au.created_by
+		LEFT JOIN admin_users uu ON uu.id = au.updated_by
 		ORDER BY au.id`)
 	if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
 	defer rows.Close()
@@ -391,6 +402,7 @@ func AdminCreateUserV2(w http.ResponseWriter, r *http.Request) {
 		Password    string `json:"password"`
 		DisplayName string `json:"display_name"`
 		GroupID     int    `json:"group_id"`
+		PlayerID    int    `json:"player_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest); return
@@ -402,8 +414,8 @@ func AdminCreateUserV2(w http.ResponseWriter, r *http.Request) {
 
 	var id int
 	err := db.DB.QueryRow(
-		`INSERT INTO admin_users (username, password_hash, display_name, group_id) VALUES ($1,$2,$3,$4) RETURNING id`,
-		req.Username, hashPassword(req.Password), req.DisplayName, req.GroupID,
+		`INSERT INTO admin_users (username, password_hash, display_name, group_id, player_id, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+		req.Username, hashPassword(req.Password), req.DisplayName, req.GroupID, req.PlayerID, admin.ID,
 	).Scan(&id)
 	if err != nil { http.Error(w, "用户名已存在", http.StatusConflict); return }
 
@@ -434,7 +446,7 @@ func AdminUpdateUserV2(w http.ResponseWriter, r *http.Request) {
 		db.DB.Exec(`UPDATE admin_users SET password_hash=$1 WHERE id=$2`, hashPassword(req.Password), uid)
 	}
 	if req.DisplayName != "" || req.GroupID > 0 {
-		db.DB.Exec(`UPDATE admin_users SET display_name=$1, group_id=$2, updated_at=NOW() WHERE id=$3`, req.DisplayName, req.GroupID, uid)
+		db.DB.Exec(`UPDATE admin_users SET display_name=$1, group_id=$2, updated_by=$3, updated_at=NOW() WHERE id=$4`, req.DisplayName, req.GroupID, admin.ID, uid)
 	}
 
 	writeLog(admin.ID, "修改操作人员", "admin_user", uid,
