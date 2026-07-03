@@ -2,10 +2,10 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { IconTournament, IconPlus, IconList, IconUsers, IconClipboardCheck, IconChartBar, IconTrophy, IconChevronRight } from '@tabler/icons-vue'
+import { IconTournament, IconPlus, IconList, IconUsers, IconClipboardCheck, IconTrophy, IconChevronRight } from '@tabler/icons-vue'
 import SessionPlay from '../components/SessionPlay.vue'
 import { api, type Player } from '../api'
-import { unplayedCount, sessionChange, sessionDisplayRating, changeSign, selectedPlayers, type SessionMatch, type SessionPlayer, type SessionDetail } from '../session-utils'
+import { sessionChange, sessionDisplayRating, changeSign, selectedPlayers, type SessionMatch, type SessionDetail, type SessionSummary } from '../session-utils'
 
 const players = ref<Player[]>([])
 const loadingPlayers = ref(true)
@@ -15,7 +15,7 @@ const selectedIDs = ref<Set<number>>(new Set())
 const sessionName = ref('')
 
 const currentSession = ref<SessionDetail | null>(null)
-const sessions = ref<SessionDetail[]>([])
+const sessions = ref<SessionSummary[]>([])
 
 const scoringMatch = ref<SessionMatch | null>(null)
 const showEditDialog = ref(false)
@@ -127,20 +127,12 @@ async function createSession() {
 
 function openScoreEditor(match: SessionMatch) { scoringMatch.value = match; showEditDialog.value = true }
 
-async function handleDeleteMatch(matchId: number) {
+async function handleCancelSession() {
   if (!currentSession.value) return
   try {
-    await fetch(`/api/sessions/${currentSession.value.id}/matches/${matchId}`, { method: 'DELETE' })
-    const detail = await fetch(`/api/sessions/${currentSession.value.id}`).then(r => r.json())
-    currentSession.value = detail
-  } catch (e: any) { showToast('删除失败') }
-}
-
-async function handleDeleteSession(sessionId: number) {
-  try {
-    await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' })
-    await loadAll()
-  } catch (e: any) { showToast('删除失败') }
+    await fetch(`/api/sessions/${currentSession.value.id}`, { method: 'DELETE' })
+    backToList()
+  } catch (e: any) { showToast('取消失败') }
 }
 
 async function handleForfeit(winnerId: number) {
@@ -178,7 +170,7 @@ async function completeSession() {
   } catch (e: any) { showToast('操作失败') }
 }
 
-async function viewSession(session: SessionDetail) {
+async function viewSession(session: SessionSummary) {
   loadingSession.value = true
   try {
     const detail = await fetch(`/api/sessions/${session.id}`).then(r => r.json())
@@ -260,7 +252,6 @@ function matchIndex(mid: number): number {
                 {{ s.status === 'completed' ? '已结束' : `剩${s.unplayed_count || 0}场` }}
               </span>
               <IconChevronRight :size="16" :stroke-width="2" style="color: #c8c9cc;" />
-              <span @click.stop="handleDeleteSession(s.id)" style="font-size:12px;color:#c8c9cc;cursor:pointer;margin-left:4px;" title="删除活动">✕</span>
             </div>
           </div>
         </div>
@@ -368,7 +359,7 @@ function matchIndex(mid: number): number {
           @complete-session="completeSession"
           @back-to-list="backToList"
           @edit-name-start="startEditName"
-          @delete-match="handleDeleteMatch"
+          @cancel-session="handleCancelSession"
         />
         <!-- Name editing (in-play) -->
         <template v-if="editingName">

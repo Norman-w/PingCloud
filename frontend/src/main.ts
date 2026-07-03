@@ -15,6 +15,7 @@ const routes = [
   { path: '/bulletin', name: 'Bulletin', component: () => import('./views/Bulletin.vue') },
   { path: '/headtohead', name: 'HeadToHead', component: () => import('./views/HeadToHead.vue') },
   { path: '/scoreboard', name: 'Scoreboard', component: () => import('./views/Scoreboard.vue') },
+  { path: '/fun-match', name: 'FunMatch', component: () => import('./views/FunMatch.vue') },
 ]
 
 const router = createRouter({

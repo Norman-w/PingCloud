@@ -103,6 +103,40 @@ func main() {
 		}
 	})
 
+	// Fun session routes (prefix: /api/fun-sessions/{id}...)
+	mux.HandleFunc("/api/fun-sessions/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		path := strings.TrimPrefix(r.URL.Path, "/api/fun-sessions/")
+
+		switch r.Method {
+		case http.MethodPost:
+			if strings.Contains(path, "/draw-card/") { handlers.DrawFunCard(w, r); return }
+			if strings.Contains(path, "/matches/") { handlers.ScoreFunMatch(w, r); return }
+			if strings.HasSuffix(path, "/complete") { handlers.CompleteFunSession(w, r); return }
+			handlers.CreateFunSession(w, r)
+		case http.MethodDelete:
+			handlers.DeleteFunSession(w, r)
+		case http.MethodPut:
+			handlers.UpdateFunSession(w, r)
+		case http.MethodGet:
+			if path == "" { handlers.GetFunSessions(w, r); return }
+			handlers.GetFunSession(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/fun-sessions", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.GetFunSessions(w, r)
+		case http.MethodPost: handlers.CreateFunSession(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))

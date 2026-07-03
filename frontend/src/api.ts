@@ -3,8 +3,10 @@ const BASE = '/api'
 export interface Player {
   id: number
   name: string
+  gender: string
   initial_rating: number
   current_rating: number
+  reference_rating: number
   created_at: string
 }
 

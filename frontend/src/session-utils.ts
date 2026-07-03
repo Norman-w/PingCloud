@@ -19,6 +19,11 @@ export interface SessionDetail {
   players: SessionPlayer[]; matches: SessionMatch[]
 }
 
+export interface SessionSummary {
+  id: number; name: string; status: string; created_at: string
+  player_count: number; match_count: number; unplayed_count: number
+}
+
 export function unplayedCount(s: SessionDetail) {
   return s.matches?.filter(m => !m.played).length || 0
 }

@@ -2,7 +2,7 @@
 import { IconChartBar, IconList } from '@tabler/icons-vue'
 import ScoreDialog from './ScoreDialog.vue'
 import AddPlayerDialog from './AddPlayerDialog.vue'
-import { sessionChange, sessionDisplayRating, changeSign, type SessionDetail, type SessionMatch } from '../session-utils'
+import { sessionDisplayRating, changeSign, type SessionDetail, type SessionMatch } from '../session-utils'
 import type { Player } from '../api'
 
 defineProps<{
@@ -25,7 +25,7 @@ const emit = defineEmits<{
   (e: 'completeSession'): void
   (e: 'backToList'): void
   (e: 'editNameStart'): void
-  (e: 'deleteMatch', matchId: number): void
+  (e: 'cancelSession'): void
 }>()
 </script>
 
@@ -97,6 +97,11 @@ const emit = defineEmits<{
     <div style="padding:8px 16px;">
       <button @click="emit('update:showAddPlayerDialog', true); emit('update:addPlayerId', 0)"
         style="width:100%;padding:12px;background:#fff;color:#1989fa;border:2px dashed #1989fa;border-radius:12px;font-size:15px;font-weight:500;cursor:pointer;">+ 拉人加入本场</button>
+    </div>
+
+    <!-- Cancel session (only when no matches played) -->
+    <div v-if="!session.matches.some(m=>m.played)" style="padding:0 16px 8px;">
+      <button @click="emit('cancelSession')" style="width:100%;padding:12px;background:#fff;color:#e74c3c;border:1px solid #e74c3c;border-radius:24px;font-size:14px;font-weight:500;cursor:pointer;">取消活动</button>
     </div>
 
     <!-- Action buttons -->

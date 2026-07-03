@@ -8,7 +8,7 @@ const container = ref<HTMLElement>()
 const loading = ref(true)
 const error = ref('')
 
-interface H2HPlayer { id: number; name: string; records: { opponent_id: number; opponent_name: string; wins: number; losses: number }[] }
+interface H2HPlayer { id: number; name: string; gender: string; records: { opponent_id: number; opponent_name: string; wins: number; losses: number }[] }
 
 let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, raycaster: THREE.Raycaster
 let animId: number
@@ -24,48 +24,70 @@ let clickTimeout: any = null
 let cycleCount = 0
 const playerObjs: { pos: THREE.Vector3; id: number; name: string }[] = []
 const nameSprites: { sprite: THREE.Sprite; canvas: HTMLCanvasElement; tex: THREE.CanvasTexture }[] = []
+let allPlayers: H2HPlayer[] = []
 let radius = 4
+
+function clearLines() {
+  lineGroups.forEach(g => {
+    scene.remove(g.line)
+    g.line.geometry.dispose()
+    ;(g.line.material as THREE.LineBasicMaterial).dispose()
+    g.dots.forEach(d => {
+      scene.remove(d)
+      if (d.userData.canvas) d.userData.canvas = null
+      if ((d.material as THREE.SpriteMaterial).map) (d.material as THREE.SpriteMaterial).map!.dispose()
+      ;(d.material as THREE.SpriteMaterial).dispose()
+    })
+  })
+  lineGroups = []
+}
+
+function buildLinesForPlayer(idx: number) {
+  clearLines()
+  const p = allPlayers[idx]
+  if (!p) return
+
+  p.records.forEach(r => {
+    const j = playerObjs.findIndex(po => po.id === r.opponent_id)
+    if (j < 0 || r.wins + r.losses === 0) return
+
+    const total = r.wins + r.losses
+    const winRate = r.wins / total
+    if (Math.abs(winRate - 0.5) < 0.01) return
+
+    const wIdx = winRate > 0.5 ? idx : j
+    const lIdx = winRate > 0.5 ? j : idx
+    const wPos = playerObjs[wIdx].pos.clone()
+    const lPos = playerObjs[lIdx].pos.clone()
+
+    const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([wPos, lPos])
+    const hsl = mode === 'dominate' ? { h: 0, s: 0.9, l: 0.08 } : { h: 0.33, s: 0.8, l: 0.08 }
+    const initColor = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+    const lineMat = new THREE.LineBasicMaterial({ color: initColor, transparent: true, opacity: 0.7, depthTest: false, depthWrite: false })
+    const line = new THREE.Line(lineGeo, lineMat)
+    scene.add(line)
+
+    const dots: THREE.Sprite[] = []
+    for (let k = 0; k < 2; k++) {
+      const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64
+      const ctx = canvas.getContext('2d')!; ctx.fillStyle = mode === 'dominate' ? '#ff4444' : '#44dd44'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(mode === 'dominate' ? '克' : '福', 32, 32)
+      const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter
+      const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false })
+      const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.4, 0.4, 1); sprite.renderOrder = 1
+      sprite.position.lerpVectors(wPos, lPos, k * 0.5) // start on the line, not at origin
+      sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.006 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: mode === 'dominate' ? '克' : '福', fromW: mode === 'dominate' }
+      scene.add(sprite)
+      dots.push(sprite)
+    }
+    lineGroups.push({ line, dots, winnerIdx: wIdx, loserIdx: lIdx, winnerPos: wPos.clone(), loserPos: lPos.clone(), intensity })
+  })
+}
 
 function setActive(idx: number) {
   activeIdx = idx
-
-  lineGroups.forEach(g => {
-    let active = false
-    if (mode === 'dominate') {
-      active = g.winnerIdx === idx // I dominate this opponent
-    } else {
-      active = g.loserIdx === idx // someone dominates me (I'm the 福星 for them)
-    }
-
-    const alpha = active ? 0.5 + g.intensity * 0.5 : 0.06
-    const hsl = mode === 'dominate' ? { h: 0, s: 0.9, l: alpha } : { h: 0.33, s: 0.8, l: alpha }
-    const color = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
-    const mat = g.line.material as THREE.LineBasicMaterial
-    mat.color = color
-    mat.opacity = alpha
-
-    g.dots.forEach(d => {
-      const sm = d.material as THREE.SpriteMaterial
-      sm.opacity = active ? 0.9 : 0.05
-      const ch = mode === 'dominate' ? '克' : '福'
-      // Update text
-      if (d.userData.char !== ch) {
-        d.userData.char = ch
-        const canvas = d.userData.canvas; const ctx = canvas.getContext('2d')!
-        ctx.clearRect(0, 0, 64, 64)
-        ctx.fillStyle = ch === '克' ? '#ff4444' : '#44dd44'
-        ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-        ctx.fillText(ch, 32, 32)
-        d.userData.tex.needsUpdate = true
-      }
-      // Reverse direction for feed mode (福送出去: loser→winner)
-      if (mode === 'feed') {
-        d.userData.fromW = false // flow from loser to winner
-      } else {
-        d.userData.fromW = true // flow from winner to loser
-      }
-    })
-  })
+  buildLinesForPlayer(idx)
 
   // Highlight active sphere
   spheres.forEach((s, i) => {
@@ -99,13 +121,14 @@ function startCycle() {
 }
 
 function setMode(m: 'dominate' | 'feed') {
-  mode = m; viewMode.value = m; setActive(activeIdx)
+  mode = m; viewMode.value = m; clearLines(); setActive(activeIdx)
 }
 
 async function init() {
   let players: H2HPlayer[]
   try { players = await fetch('/api/headtohead').then(r => r.json()) }
   catch (e: any) { error.value = '加载失败'; loading.value = false; return }
+  allPlayers = players
   loading.value = false
   if (!container.value || players.length === 0) { error.value = '暂无球员'; return }
 
@@ -150,8 +173,9 @@ async function init() {
     const pos = new THREE.Vector3(x, y, z)
     playerObjs.push({ pos, id: p.id, name: p.name })
 
-    const geo = new THREE.SphereGeometry(0.3, 32, 32)
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1989fa, roughness: 0.3, metalness: 0.6, emissive: 0x112244, emissiveIntensity: 0.3 })
+    const geo = new THREE.SphereGeometry(0.18, 16, 16)
+    const isFemale = p.gender === 'female'
+    const mat = new THREE.MeshStandardMaterial({ color: isFemale ? 0xff69b4 : 0x1989fa, roughness: 0.3, metalness: 0.6, emissive: isFemale ? 0x331122 : 0x112244, emissiveIntensity: 0.3 })
     const sphere = new THREE.Mesh(geo, mat)
     sphere.position.copy(pos)
     sphere.userData = { idx: i }
@@ -159,8 +183,8 @@ async function init() {
     spheres.push(sphere)
 
     // Glow
-    const glowG = new THREE.SphereGeometry(0.4, 32, 32)
-    const glowM = new THREE.MeshBasicMaterial({ color: 0x1989fa, transparent: true, opacity: 0.15 })
+    const glowG = new THREE.SphereGeometry(0.26, 16, 16)
+    const glowM = new THREE.MeshBasicMaterial({ color: isFemale ? 0xff69b4 : 0x1989fa, transparent: true, opacity: 0.15 })
     const glow = new THREE.Mesh(glowG, glowM)
     glow.position.copy(pos)
     scene.add(glow)
@@ -170,55 +194,14 @@ async function init() {
     const nctx = nameCanvas.getContext('2d')!; nctx.fillStyle = '#ffffff'; nctx.font = 'bold 32px sans-serif'; nctx.textAlign = 'center'; nctx.textBaseline = 'middle'; nctx.fillText(p.name, 128, 32)
     const nameTex = new THREE.CanvasTexture(nameCanvas); nameTex.minFilter = THREE.LinearFilter
     const nameMat = new THREE.SpriteMaterial({ map: nameTex, transparent: true, depthTest: false, depthWrite: false })
-    const nameSprite = new THREE.Sprite(nameMat); nameSprite.scale.set(3, 0.75, 1)
+    const nameSprite = new THREE.Sprite(nameMat); nameSprite.scale.set(1.8, 0.45, 1)
     nameSprite.position.copy(pos.clone().add(new THREE.Vector3(0, 0.6, 0)))
     nameSprite.renderOrder = 2
     scene.add(nameSprite)
     nameSprites.push({ sprite: nameSprite, canvas: nameCanvas, tex: nameTex })
   })
 
-  // Straight lines: one per pair
-  const drawn = new Set<string>()
-  players.forEach((p, i) => {
-    p.records.forEach(r => {
-      const j = playerObjs.findIndex(po => po.id === r.opponent_id)
-      if (j < 0 || r.wins + r.losses === 0) return
-      const key = [i, j].sort().join('-')
-      if (drawn.has(key)) return
-      drawn.add(key)
-
-      const total = r.wins + r.losses
-      const winRate = r.wins / total
-      if (Math.abs(winRate - 0.5) < 0.01) return
-
-      const wIdx = winRate > 0.5 ? i : j
-      const lIdx = winRate > 0.5 ? j : i
-      const wPos = playerObjs[wIdx].pos.clone()
-      const lPos = playerObjs[lIdx].pos.clone()
-
-      const intensity = 0.4 + Math.abs(winRate - 0.5) * 1.2
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([wPos, lPos])
-      const hsl = { h: 0, s: 0.9, l: 0.08 }
-      const initColor = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
-      const lineMat = new THREE.LineBasicMaterial({ color: initColor, transparent: true, opacity: 0.08, depthTest: false, depthWrite: false })
-      const line = new THREE.Line(lineGeo, lineMat)
-      scene.add(line)
-
-      const dots: THREE.Sprite[] = []
-      for (let k = 0; k < 2; k++) {
-        const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64
-        const ctx = canvas.getContext('2d')!
-        ctx.fillStyle = '#' + initColor.getHexString(); ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('克', 32, 32)
-        const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter
-        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.08, depthTest: false, depthWrite: false })
-        const sprite = new THREE.Sprite(spriteMat); sprite.scale.set(0.4, 0.4, 1); sprite.renderOrder = 1
-        sprite.userData = { a: wPos.clone(), b: lPos.clone(), t: k * 0.5, speed: 0.006 + Math.random() * 0.004, lineGrp: true, canvas, tex, char: '克' }
-        scene.add(sprite)
-        dots.push(sprite)
-      }
-      lineGroups.push({ line, dots, winnerIdx: wIdx, loserIdx: lIdx, winnerPos: wPos.clone(), loserPos: lPos.clone(), intensity })
-    })
-  })
+  // Lines built on-demand in setActive (lazy), not all upfront
 
   // Highlight first player
   setActive(0)
@@ -306,7 +289,7 @@ async function init() {
 }
 
 onMounted(() => init())
-onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout) })
+onUnmounted(() => { cancelAnimationFrame(animId); clearInterval(cycleTimer); clearTimeout(clickTimeout); clearLines() })
 </script>
 
 <template>

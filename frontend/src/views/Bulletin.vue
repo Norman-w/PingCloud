@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { IconArrowLeft } from '@tabler/icons-vue'
 import { bulletins, markRead, getReadIds, type Bulletin } from '../bulletins'
 
 const router = useRouter()

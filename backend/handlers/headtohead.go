@@ -8,7 +8,7 @@ import (
 
 func GetHeadToHead(w http.ResponseWriter, r *http.Request) {
 	// Get all players ordered by rating
-	rows, err := db.DB.Query(`SELECT id, name FROM players ORDER BY current_rating DESC`)
+	rows, err := db.DB.Query(`SELECT id, name, COALESCE(gender,'') FROM players ORDER BY current_rating DESC`)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -25,13 +25,14 @@ func GetHeadToHead(w http.ResponseWriter, r *http.Request) {
 	type PlayerRow struct {
 		ID      int         `json:"id"`
 		Name    string      `json:"name"`
+		Gender  string      `json:"gender"`
 		Records []H2HRecord `json:"records"`
 	}
 
 	var players []PlayerRow
 	for rows.Next() {
 		var p PlayerRow
-		if err := rows.Scan(&p.ID, &p.Name); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Gender); err != nil {
 			continue
 		}
 		players = append(players, p)

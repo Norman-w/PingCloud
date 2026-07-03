@@ -9,7 +9,7 @@ import (
 
 func GetRankings(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`
-		SELECT p.id, p.name, p.initial_rating, p.current_rating, p.created_at,
+		SELECT p.id, p.name, COALESCE(p.gender,''), p.initial_rating, p.current_rating, COALESCE(p.reference_rating,0), p.created_at,
 			COALESCE(SUM(CASE WHEN m.forfeit = false THEN 1 ELSE 0 END), 0) AS matches_played,
 			COALESCE(SUM(CASE WHEN m.winner_id = p.id AND m.forfeit = false THEN 1 ELSE 0 END), 0) AS wins,
 			COALESCE(SUM(CASE WHEN m.winner_id IS NOT NULL AND m.winner_id != p.id AND m.forfeit = false THEN 1 ELSE 0 END), 0) AS losses,
@@ -38,7 +38,7 @@ func GetRankings(w http.ResponseWriter, r *http.Request) {
 	rankings := make([]RankingEntry, 0)
 	for rows.Next() {
 		var re RankingEntry
-		if err := rows.Scan(&re.ID, &re.Name, &re.InitialRating, &re.CurrentRating, &re.CreatedAt,
+		if err := rows.Scan(&re.ID, &re.Name, &re.Gender, &re.InitialRating, &re.CurrentRating, &re.ReferenceRating, &re.CreatedAt,
 			&re.MatchesPlayed, &re.Wins, &re.Losses, &re.ForfeitWins, &re.Forfeits); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
