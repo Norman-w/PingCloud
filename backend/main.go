@@ -20,12 +20,20 @@ func cors(w http.ResponseWriter) {
 }
 
 func logAccess(r *http.Request) {
+	ip := r.Header.Get("X-Real-IP")
+	if ip == "" { ip = r.Header.Get("X-Forwarded-For") }
+	if ip == "" { ip = r.RemoteAddr }
+	// strip port from RemoteAddr if present
+	if idx := strings.LastIndex(ip, ":"); idx > 0 && !strings.Contains(ip, "[") {
+		ip = ip[:idx]
+	}
+
 	pid := 0
 	if c, err := r.Cookie("ping_id"); err == nil && c.Value != "" {
 		fmt.Sscanf(c.Value, "%d:", &pid)
 	}
 	db.DB.Exec(`INSERT INTO access_logs (ip, path, method, user_agent, referer, player_id) VALUES ($1,$2,$3,$4,$5,$6)`,
-		r.RemoteAddr, r.URL.Path, r.Method, r.UserAgent(), r.Referer(), pid)
+		ip, r.URL.Path, r.Method, r.UserAgent(), r.Referer(), pid)
 }
 
 func loadDotEnv(paths ...string) {
