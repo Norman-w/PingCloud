@@ -12,7 +12,7 @@ import (
 
 func GetPlayers(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(
-		"SELECT id, name, COALESCE(gender,''), initial_rating, current_rating, COALESCE(reference_rating,0), created_at FROM players ORDER BY current_rating DESC")
+		"SELECT id, name, COALESCE(gender,''), COALESCE(phone,''), initial_rating, current_rating, COALESCE(reference_rating,0), created_at FROM players ORDER BY current_rating DESC")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -22,7 +22,7 @@ func GetPlayers(w http.ResponseWriter, r *http.Request) {
 	players := make([]models.Player, 0)
 	for rows.Next() {
 		var p models.Player
-		if err := rows.Scan(&p.ID, &p.Name, &p.Gender, &p.InitialRating, &p.CurrentRating, &p.ReferenceRating, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Gender, &p.Phone, &p.InitialRating, &p.CurrentRating, &p.ReferenceRating, &p.CreatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -42,8 +42,8 @@ func GetPlayer(w http.ResponseWriter, r *http.Request) {
 
 	var p models.Player
 	err = db.DB.QueryRow(
-		"SELECT id, name, COALESCE(gender,''), initial_rating, current_rating, COALESCE(reference_rating,0), created_at FROM players WHERE id = $1", id,
-	).Scan(&p.ID, &p.Name, &p.Gender, &p.InitialRating, &p.CurrentRating, &p.ReferenceRating, &p.CreatedAt)
+		"SELECT id, name, COALESCE(gender,''), COALESCE(phone,''), initial_rating, current_rating, COALESCE(reference_rating,0), created_at FROM players WHERE id = $1", id,
+	).Scan(&p.ID, &p.Name, &p.Gender, &p.Phone, &p.InitialRating, &p.CurrentRating, &p.ReferenceRating, &p.CreatedAt)
 	if err != nil {
 		http.Error(w, "player not found", http.StatusNotFound)
 		return
@@ -119,12 +119,13 @@ func CreatePlayer(w http.ResponseWriter, r *http.Request) {
 		gender = ""
 	}
 	refRating := req.ReferenceRating
+	phone := req.Phone
 
 	var p models.Player
 	err := db.DB.QueryRow(
-		"INSERT INTO players (name, gender, initial_rating, current_rating, reference_rating) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, COALESCE(gender,''), initial_rating, current_rating, COALESCE(reference_rating,0), created_at",
-		strings.TrimSpace(req.Name), gender, rating, rating, refRating,
-	).Scan(&p.ID, &p.Name, &p.Gender, &p.InitialRating, &p.CurrentRating, &p.ReferenceRating, &p.CreatedAt)
+		"INSERT INTO players (name, gender, phone, initial_rating, current_rating, reference_rating) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, COALESCE(gender,''), COALESCE(phone,''), initial_rating, current_rating, COALESCE(reference_rating,0), created_at",
+		strings.TrimSpace(req.Name), gender, phone, rating, rating, refRating,
+	).Scan(&p.ID, &p.Name, &p.Gender, &p.Phone, &p.InitialRating, &p.CurrentRating, &p.ReferenceRating, &p.CreatedAt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

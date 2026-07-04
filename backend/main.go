@@ -193,6 +193,26 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Auth routes
+	mux.HandleFunc("/api/auth/send-code", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPost { handlers.AuthSendCode(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/auth/verify", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPost { handlers.AuthVerify(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.AuthMe(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))

@@ -4,6 +4,7 @@ export interface Player {
   id: number
   name: string
   gender: string
+  phone: string
   initial_rating: number
   current_rating: number
   reference_rating: number

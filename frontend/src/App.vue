@@ -1,10 +1,54 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconHome, IconTournament, IconUserPlus, IconConfetti } from '@tabler/icons-vue'
+import { IconHome, IconTournament, IconUserPlus, IconConfetti, IconLogin } from '@tabler/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
+
+// ── SMS login ──
+const myId = ref(0)
+const myName = ref('')
+const showLogin = ref(false)
+const loginPhone = ref('')
+const loginCode = ref('')
+const loginStep = ref<'phone'|'code'|'setpw'>('phone')
+const loginPw = ref('')
+const loginSending = ref(false)
+const loginMsg = ref('')
+
+function loadMe() {
+  fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => {
+    if (d?.player_id) { myId.value = d.player_id; myName.value = d.player_name }
+  }).catch(() => {})
+}
+
+async function sendCode() {
+  if (!loginPhone.value) return
+  loginSending.value = true; loginMsg.value = ''
+  try {
+    const r = await fetch('/api/auth/send-code', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({phone:loginPhone.value}) })
+    if (!r.ok) { const t = await r.text(); loginMsg.value = t; return }
+    loginStep.value = 'code'
+  } catch { loginMsg.value = '发送失败' }
+  finally { loginSending.value = false }
+}
+
+async function verifyCode() {
+  if (!loginCode.value) return
+  try {
+    const r = await fetch('/api/auth/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({phone:loginPhone.value, code:loginCode.value}) })
+    if (!r.ok) { loginMsg.value = '验证码错误'; return }
+    const d = await r.json()
+    myId.value = d.player_id; myName.value = d.player_name
+    showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginStep.value = 'phone'; loginMsg.value = ''
+  } catch { loginMsg.value = '验证失败' }
+}
+
+function openLogin() { loginStep.value = 'phone'; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; showLogin.value = true }
+function logout() { myId.value = 0; myName.value = ''; document.cookie = 'ping_id=;max-age=0;path=/' }
+
+onMounted(() => { loadMe() })
 
 const tabs = [
   { name: 'Home', label: '排位', component: IconHome },
@@ -30,6 +74,13 @@ function onTabChange(name: string) {
 
 <template>
   <div id="app-shell">
+    <!-- Login indicator -->
+    <div v-if="!hideTabbar" style="position:fixed;top:0;right:0;z-index:100;padding:6px 12px;">
+      <button v-if="myId>0" @click="logout" style="background:rgba(255,255,255,0.9);border:1px solid #e0e0e0;border-radius:12px;padding:3px 10px;font-size:11px;color:#1989fa;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.06);">🏓 {{ myName }}</button>
+      <button v-else @click="openLogin" style="background:rgba(255,255,255,0.9);border:1px dashed #ccc;border-radius:12px;padding:3px 10px;font-size:11px;color:#999;cursor:pointer;">
+        <IconLogin :size="14" style="vertical-align:-2px;" /> 登录</button>
+    </div>
+
     <div class="app-body">
       <router-view />
     </div>
@@ -45,6 +96,27 @@ function onTabChange(name: string) {
         <span class="tab-label">{{ tab.label }}</span>
       </button>
     </nav>
+
+    <!-- Login modal -->
+    <div v-if="showLogin" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:2000;display:flex;align-items:center;justify-content:center;" @click.self="showLogin=false">
+      <div style="background:#fff;border-radius:16px;padding:24px;width:300px;">
+        <h3 style="text-align:center;margin-bottom:6px;">短信验证登录</h3>
+        <div v-if="loginMsg" style="text-align:center;color:#e74c3c;font-size:12px;margin-bottom:8px;">{{ loginMsg }}</div>
+        <!-- Phone step -->
+        <template v-if="loginStep==='phone'">
+          <input v-model="loginPhone" placeholder="输入手机号" type="tel" maxlength="11" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;" />
+          <button @click="sendCode" :disabled="loginSending" style="width:100%;padding:14px;background:#1989fa;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;">
+            {{ loginSending ? '发送中...' : '获取验证码' }}</button>
+        </template>
+        <!-- Code step -->
+        <template v-if="loginStep==='code'">
+          <div style="font-size:13px;color:#666;text-align:center;margin-bottom:8px;">已发送至 {{ loginPhone }}</div>
+          <input v-model="loginCode" placeholder="输入4位验证码" type="tel" maxlength="4" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:20px;font-weight:700;text-align:center;outline:none;box-sizing:border-box;margin-bottom:12px;letter-spacing:8px;" />
+          <button @click="verifyCode" style="width:100%;padding:14px;background:#07c160;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:8px;">验证登录</button>
+          <button @click="loginStep='phone'" style="width:100%;padding:10px;background:none;border:none;color:#999;font-size:13px;cursor:pointer;">重新发送</button>
+        </template>
+      </div>
+    </div>
   </div>
 </template>
 

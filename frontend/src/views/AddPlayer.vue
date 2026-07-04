@@ -5,6 +5,7 @@ import { api } from '../api'
 
 const name = ref('')
 const gender = ref('')
+const phone = ref('')
 const initialRating = ref('')
 const referenceRating = ref('')
 const submitting = ref(false)
@@ -21,6 +22,7 @@ async function onSubmit() {
     const player = await api.createPlayer({
       name: name.value.trim(),
       gender: gender.value,
+      phone: phone.value.trim(),
       initial_rating: ir,
       reference_rating: rr,
     } as any)
@@ -44,6 +46,13 @@ async function onSubmit() {
       <div style="margin-bottom: 14px;">
         <label style="font-size: 14px; color: #646566; display: block; margin-bottom: 6px;">姓名</label>
         <input v-model="name" placeholder="请输入球员姓名"
+          style="width: 100%; padding: 12px; border: 1px solid #ebedf0; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box;" />
+      </div>
+
+      <!-- Phone -->
+      <div style="margin-bottom: 14px;">
+        <label style="font-size: 14px; color: #646566; display: block; margin-bottom: 6px;">手机号</label>
+        <input v-model="phone" placeholder="用于短信验证登录（选填）"
           style="width: 100%; padding: 12px; border: 1px solid #ebedf0; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box;" />
       </div>
 
