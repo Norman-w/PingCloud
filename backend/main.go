@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +17,15 @@ func cors(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
+
+func logAccess(r *http.Request) {
+	pid := 0
+	if c, err := r.Cookie("ping_id"); err == nil && c.Value != "" {
+		fmt.Sscanf(c.Value, "%d:", &pid)
+	}
+	db.DB.Exec(`INSERT INTO access_logs (ip, path, method, user_agent, referer, player_id) VALUES ($1,$2,$3,$4,$5,$6)`,
+		r.RemoteAddr, r.URL.Path, r.Method, r.UserAgent(), r.Referer(), pid)
 }
 
 func loadDotEnv(paths ...string) {
@@ -341,6 +351,12 @@ func main() {
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
+	mux.HandleFunc("/api/admin/access-logs", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.AdminGetAccessLogs(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
 	mux.HandleFunc("/api/admin/rating", func(w http.ResponseWriter, r *http.Request) {
 		cors(w)
 		if r.Method == http.MethodOptions {
@@ -397,7 +413,16 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// Wrap mux with access logging
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip OPTIONS and static file requests
+		if r.Method != http.MethodOptions && !strings.HasPrefix(r.URL.Path, "/assets/") && r.URL.Path != "/favicon.svg" && r.URL.Path != "/icons.svg" {
+			go logAccess(r)
+		}
+		mux.ServeHTTP(w, r)
+	})
+
 	port := ":8090"
 	log.Printf("PingPong server starting on %s", port)
-	log.Fatal(http.ListenAndServe(port, mux))
+	log.Fatal(http.ListenAndServe(port, handler))
 }

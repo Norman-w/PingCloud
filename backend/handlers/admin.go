@@ -453,3 +453,32 @@ func AdminUpdateUserV2(w http.ResponseWriter, r *http.Request) {
 		`{"group_id":`+strconv.Itoa(req.GroupID)+`}`, r.RemoteAddr)
 	writeJSON(w, map[string]string{"status": "ok"})
 }
+
+// GET /api/admin/access-logs
+func AdminGetAccessLogs(w http.ResponseWriter, r *http.Request) {
+	admin := getAdmin(r)
+	if admin == nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
+
+	rows, err := db.DB.Query(`
+		SELECT al.id, COALESCE(al.ip,''), COALESCE(al.path,''), COALESCE(al.method,''),
+			COALESCE(al.user_agent,''), COALESCE(al.referer,''), COALESCE(al.player_id,0),
+			COALESCE(p.name,''), al.created_at
+		FROM access_logs al
+		LEFT JOIN players p ON p.id = al.player_id
+		ORDER BY al.id DESC LIMIT 200`)
+	if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+	defer rows.Close()
+
+	var logs []map[string]interface{}
+	for rows.Next() {
+		var id, pid int
+		var ip, path, method, ua, ref, pname, time string
+		rows.Scan(&id, &ip, &path, &method, &ua, &ref, &pid, &pname, &time)
+		logs = append(logs, map[string]interface{}{
+			"id": id, "ip": ip, "path": path, "method": method,
+			"user_agent": ua, "referer": ref, "player_id": pid, "player_name": pname, "created_at": time,
+		})
+	}
+	if logs == nil { logs = []map[string]interface{}{} }
+	writeJSON(w, logs)
+}

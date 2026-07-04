@@ -515,21 +515,26 @@ func ScoreFunMatch(w http.ResponseWriter, r *http.Request) {
 	if req.Game3ScoreMale != nil { newMalePoints += *req.Game3ScoreMale }
 	if req.Game3ScoreFemale != nil { newFemalePoints += *req.Game3ScoreFemale }
 
-	// Undo old stats if previously scored
+	// Transaction with row lock to prevent race conditions (double-click, concurrent scoring)
+	tx, err := db.DB.Begin()
+	if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+	defer tx.Rollback()
+
+	// Lock the match row for update
 	var wasPlayed bool
 	var oldWinnerTeam sql.NullString
 	var oldG1m, oldG1f, oldG2m, oldG2f sql.NullInt64
 	var oldG3m, oldG3f sql.NullInt64
-	db.DB.QueryRow(`SELECT played, winner_team, game1_score_male, game1_score_female, game2_score_male, game2_score_female, game3_score_male, game3_score_female FROM fun_matches WHERE id=$1`, matchID).
+	tx.QueryRow(`SELECT played, winner_team, game1_score_male, game1_score_female, game2_score_male, game2_score_female, game3_score_male, game3_score_female FROM fun_matches WHERE id=$1 FOR UPDATE`, matchID).
 		Scan(&wasPlayed, &oldWinnerTeam, &oldG1m, &oldG1f, &oldG2m, &oldG2f, &oldG3m, &oldG3f)
 
+	// Undo old stats if previously scored
 	if wasPlayed && oldWinnerTeam.String != "" {
 		if oldWinnerTeam.String == "male" {
-			db.DB.Exec(`UPDATE fun_sessions SET male_wins = GREATEST(male_wins - 1, 0) WHERE id=$1`, sessionID)
+			tx.Exec(`UPDATE fun_sessions SET male_wins = GREATEST(male_wins - 1, 0) WHERE id=$1`, sessionID)
 		} else {
-			db.DB.Exec(`UPDATE fun_sessions SET female_wins = GREATEST(female_wins - 1, 0) WHERE id=$1`, sessionID)
+			tx.Exec(`UPDATE fun_sessions SET female_wins = GREATEST(female_wins - 1, 0) WHERE id=$1`, sessionID)
 		}
-		// Undo old game wins and points
 		oldMG := 0; oldFG := 0
 		if oldG1m.Valid && oldG1f.Valid {
 			if oldG1m.Int64 > oldG1f.Int64 { oldMG++ } else { oldFG++ }
@@ -542,11 +547,11 @@ func ScoreFunMatch(w http.ResponseWriter, r *http.Request) {
 		}
 		oldMP := int(oldG1m.Int64 + oldG2m.Int64 + oldG3m.Int64)
 		oldFP := int(oldG1f.Int64 + oldG2f.Int64 + oldG3f.Int64)
-		db.DB.Exec(`UPDATE fun_sessions SET male_game_wins = GREATEST(male_game_wins - $1, 0), female_game_wins = GREATEST(female_game_wins - $2, 0), male_points = GREATEST(male_points - $3, 0), female_points = GREATEST(female_points - $4, 0) WHERE id=$5`,
+		tx.Exec(`UPDATE fun_sessions SET male_game_wins = GREATEST(male_game_wins - $1, 0), female_game_wins = GREATEST(female_game_wins - $2, 0), male_points = GREATEST(male_points - $3, 0), female_points = GREATEST(female_points - $4, 0) WHERE id=$5`,
 			oldMG, oldFG, oldMP, oldFP, sessionID)
 	}
 
-	_, err := db.DB.Exec(
+	tx.Exec(
 		`UPDATE fun_matches SET
 			game1_score_male=$1, game1_score_female=$2,
 			game2_score_male=$3, game2_score_female=$4,
@@ -558,18 +563,16 @@ func ScoreFunMatch(w http.ResponseWriter, r *http.Request) {
 		g3m, g3f,
 		winnerID, winnerTeam, matchID,
 	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	if winnerTeam == "male" {
-		db.DB.Exec(`UPDATE fun_sessions SET male_wins = male_wins + 1 WHERE id=$1`, sessionID)
+		tx.Exec(`UPDATE fun_sessions SET male_wins = male_wins + 1 WHERE id=$1`, sessionID)
 	} else {
-		db.DB.Exec(`UPDATE fun_sessions SET female_wins = female_wins + 1 WHERE id=$1`, sessionID)
+		tx.Exec(`UPDATE fun_sessions SET female_wins = female_wins + 1 WHERE id=$1`, sessionID)
 	}
-	db.DB.Exec(`UPDATE fun_sessions SET male_game_wins = male_game_wins + $1, female_game_wins = female_game_wins + $2, male_points = male_points + $3, female_points = female_points + $4 WHERE id=$5`,
+	tx.Exec(`UPDATE fun_sessions SET male_game_wins = male_game_wins + $1, female_game_wins = female_game_wins + $2, male_points = male_points + $3, female_points = female_points + $4 WHERE id=$5`,
 		newMaleGames, newFemaleGames, newMalePoints, newFemalePoints, sessionID)
+
+	if err := tx.Commit(); err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
 
 	writeJSON(w, map[string]interface{}{
 		"winner_id":   winnerID,

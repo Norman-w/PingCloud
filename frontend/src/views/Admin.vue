@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { IconUsers, IconHistory, IconLogout, IconPlus, IconEdit, IconTrash, IconShield, IconPencil } from '@tabler/icons-vue'
+import { IconUsers, IconHistory, IconLogout, IconPlus, IconEdit, IconTrash, IconShield, IconPencil, IconEye } from '@tabler/icons-vue'
 import { api, type Player } from '../api'
 
 const router = useRouter()
@@ -16,7 +16,8 @@ const users = ref<AdminUser[]>([])
 const groups = ref<AdminGroup[]>([])
 const logs = ref<LogEntry[]>([])
 const players = ref<Player[]>([])
-const tab = ref<'users' | 'logs' | 'rating'>('users')
+const tab = ref<'users' | 'logs' | 'rating' | 'access'>('users')
+const accessLogs = ref<any[]>([])
 
 const showDialog = ref(false)
 const editUser = ref<AdminUser | null>(null)
@@ -57,6 +58,7 @@ async function loadPlayers() { try { players.value = await api.getPlayers() } ca
 async function loadUsers() { try { const r = await fetch('/api/admin/users', { credentials: 'include' }); if (r.ok) users.value = await r.json() } catch {} }
 async function loadLogs() { try { const r = await fetch('/api/admin/logs', { credentials: 'include' }); if (r.ok) logs.value = await r.json() } catch {} }
 async function loadGroups() { try { const r = await fetch('/api/admin/groups', { credentials: 'include' }); if (r.ok) groups.value = await r.json() } catch {} }
+async function loadAccessLogs() { try { const r = await fetch('/api/admin/access-logs', { credentials: 'include' }); if (r.ok) accessLogs.value = await r.json() } catch {} }
 
 function openCreate() {
   editUser.value = null; formUser.value = ''; formPass.value = ''; formName.value = ''; formGroup.value = 4; formPlayerId.value = 0; playerSearch.value = ''
@@ -137,6 +139,9 @@ async function logout() {
       <button v-if="me?.permissions.edit_ratings" @click="tab='rating'" style="flex:1;padding:14px;border:none;background:none;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"
         :style="{color:tab==='rating'?'#1989fa':'#969799',borderBottom:tab==='rating'?'2px solid #1989fa':'2px solid transparent'}">
         <IconPencil :size="18" /> 球员积分</button>
+      <button @click="tab='access';loadAccessLogs()" style="flex:1;padding:14px;border:none;background:none;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"
+        :style="{color:tab==='access'?'#1989fa':'#969799',borderBottom:tab==='access'?'2px solid #1989fa':'2px solid transparent'}">
+        <IconEye :size="18" /> 访问记录</button>
     </div>
 
     <!-- ===== 操作人员 ===== -->
@@ -226,6 +231,23 @@ async function logout() {
           </div>
           <div style="font-size:22px;font-weight:800;color:#1989fa;">{{ p.current_rating }}</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ===== 访问记录 ===== -->
+    <div v-if="tab==='access'" style="padding:12px 16px;">
+      <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+        <div v-for="l in accessLogs" :key="l.id" style="padding:10px 16px;border-bottom:1px solid #f5f5f5;">
+          <div style="display:flex;justify-content:space-between;">
+            <span style="font-size:12px;color:#1989fa;">{{ l.ip }}</span>
+            <span style="font-size:11px;color:#c8c9cc;">{{ l.created_at?.slice(0,19)?.replace('T',' ') }}</span>
+          </div>
+          <div style="font-size:13px;margin-top:2px;">
+            <span style="font-weight:600;">{{ l.method }}</span> {{ l.path }}
+            <span v-if="l.player_name" style="color:#07c160;">· 🏓{{ l.player_name }}</span>
+          </div>
+        </div>
+        <div v-if="accessLogs.length===0" style="text-align:center;padding:40px;color:#999;">暂无访问记录</div>
       </div>
     </div>
 
