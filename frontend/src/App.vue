@@ -41,8 +41,25 @@ async function verifyCode() {
     if (!r.ok) { loginMsg.value = '验证码错误'; return }
     const d = await r.json()
     myId.value = d.player_id; myName.value = d.player_name
-    showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginStep.value = 'phone'; loginMsg.value = ''
+    if (d.need_setup) {
+      loginStep.value = 'setup'
+    } else {
+      showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginStep.value = 'phone'; loginMsg.value = ''
+    }
   } catch { loginMsg.value = '验证失败' }
+}
+
+async function setupAccount() {
+  // Called after user picks a username on first login
+  if (!loginPw.value) return
+  try {
+    await fetch(`/api/admin/users`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: loginPw.value, display_name: myName.value, group_id: 4, player_id: myId.value }),
+      credentials: 'include',
+    })
+    showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginPw.value = ''; loginStep.value = 'phone'; loginMsg.value = ''
+  } catch { loginMsg.value = '设置失败' }
 }
 
 function openLogin() { loginStep.value = 'phone'; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; showLogin.value = true }
@@ -108,6 +125,13 @@ function onTabChange(name: string) {
           <button @click="sendCode" :disabled="loginSending" style="width:100%;padding:14px;background:#1989fa;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;">
             {{ loginSending ? '发送中...' : '获取验证码' }}</button>
         </template>
+        <!-- Setup step (first time login) -->
+        <template v-if="loginStep==='setup'">
+          <div style="font-size:13px;color:#07c160;text-align:center;margin-bottom:8px;">🎉 首次登录！请设置登录账号</div>
+          <input v-model="loginPw" placeholder="设置登录账号（英文/拼音）" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;" />
+          <button @click="setupAccount" style="width:100%;padding:14px;background:#07c160;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;">确认设置</button>
+        </template>
+
         <!-- Code step -->
         <template v-if="loginStep==='code'">
           <div style="font-size:13px;color:#666;text-align:center;margin-bottom:8px;">已发送至 {{ loginPhone }}</div>

@@ -157,7 +157,7 @@ func AdminLogin(w http.ResponseWriter, r *http.Request) {
 			COALESCE(au.group_id,0), COALESCE(ag.name,''), au.password_hash, au.created_at
 		FROM admin_users au
 		LEFT JOIN admin_groups ag ON ag.id = au.group_id
-		WHERE au.username=$1`, req.Username,
+		WHERE au.deleted=false AND au.username=$1`, req.Username,
 	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &gid, &gname, &hash, &u.CreatedAt)
 	if err != nil {
 		http.Error(w, "用户名或密码错误", http.StatusUnauthorized); return
@@ -211,9 +211,7 @@ func AdminMe(w http.ResponseWriter, r *http.Request) {
 // GET /api/admin/users
 func AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	admin := getAdmin(r)
-	if admin == nil || (admin.Role != "super_admin" && admin.Role != "organizer") {
-		http.Error(w, "forbidden", http.StatusForbidden); return
-	}
+	if admin == nil { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
 
 	rows, err := db.DB.Query(`
 		SELECT au.id, au.username, COALESCE(au.display_name,''), au.role,
@@ -227,6 +225,7 @@ func AdminListUsers(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN players p ON p.id = au.player_id
 		LEFT JOIN admin_users cu ON cu.id = au.created_by
 		LEFT JOIN admin_users uu ON uu.id = au.updated_by
+		WHERE au.deleted=false
 		ORDER BY au.id`)
 	if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
 	defer rows.Close()
@@ -315,17 +314,15 @@ func AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	// Don't delete self
 	if uid == admin.ID { http.Error(w, "不能删除自己", http.StatusBadRequest); return }
 
-	db.DB.Exec(`DELETE FROM admin_users WHERE id=$1`, uid)
+	db.DB.Exec(`UPDATE admin_users SET deleted=true WHERE id=$1`, uid)
 	writeLog(admin.ID, "删除操作人员", "admin_user", uid, "", r.RemoteAddr)
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // GET /api/admin/logs
 func AdminGetLogs(w http.ResponseWriter, r *http.Request) {
-	admin := getAdmin(r)
-	if admin == nil || (admin.Role != "super_admin" && admin.Role != "organizer") {
-		http.Error(w, "forbidden", http.StatusForbidden); return
-	}
+	admin := checkPerm(r, "view_logs")
+	if admin == nil { http.Error(w, "forbidden", http.StatusForbidden); return }
 
 	rows, err := db.DB.Query(`
 		SELECT al.id, al.admin_id, COALESCE(au.display_name, au.username), al.action,
@@ -408,9 +405,18 @@ func AdminCreateUserV2(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid body", http.StatusBadRequest); return
 	}
 	if req.Username == "" || req.Password == "" {
-		http.Error(w, "username and password required", http.StatusBadRequest); return
+		http.Error(w, "用户名和密码不能为空", http.StatusBadRequest); return
 	}
 	if req.GroupID == 0 { req.GroupID = 4 } // default participant
+
+	// Duplicate display_name check
+	if req.DisplayName != "" {
+		var dupName int
+		db.DB.QueryRow(`SELECT COUNT(*) FROM admin_users WHERE display_name=$1 AND deleted=false`, req.DisplayName).Scan(&dupName)
+		if dupName > 0 {
+			http.Error(w, "该显示名称已存在", http.StatusConflict); return
+		}
+	}
 
 	var id int
 	err := db.DB.QueryRow(

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -188,12 +189,25 @@ func AuthVerify(w http.ResponseWriter, r *http.Request) {
 	var pname string
 	db.DB.QueryRow(`SELECT id, name FROM players WHERE phone=$1`, req.Phone).Scan(&pid, &pname)
 
-	// Set identity cookie (simple HMAC token)
+	// Check if player has an admin account
+	var hasAccount bool
+	db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM admin_users WHERE player_id=$1 AND deleted=false)`, pid).Scan(&hasAccount)
+
+	// Auto-claim: if no admin account yet, create one (needs username setup)
+	if !hasAccount {
+		db.DB.Exec(`INSERT INTO admin_users (username, display_name, group_id, player_id) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+			"player_"+strconv.Itoa(pid), pname, 4, pid) // participant group
+	}
+
+	// Set identity cookie
 	token := hex.EncodeToString([]byte(fmt.Sprintf("%d:%d", pid, time.Now().Unix())))
 	http.SetCookie(w, &http.Cookie{
 		Name: "ping_id", Value: token, Path: "/", MaxAge: 86400 * 30, HttpOnly: false,
 	})
-	writeJSON(w, map[string]interface{}{"player_id": pid, "player_name": pname})
+	writeJSON(w, map[string]interface{}{
+		"player_id": pid, "player_name": pname,
+		"need_setup": !hasAccount,
+	})
 }
 
 // GET /api/auth/me — current identity from cookie

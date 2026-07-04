@@ -171,7 +171,7 @@ async function logout() {
 
       <!-- All players with admin status -->
       <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-        <div v-for="p in players.filter(p=>!playerSearch||p.name.includes(playerSearch))" :key="p.id"
+        <div v-for="p in players.filter(p=>!playerSearch||p.name.includes(playerSearch)).sort((a,b)=>(users.some(u=>u.player_id===b.id)?1:0)-(users.some(u=>u.player_id===a.id)?1:0))" :key="p.id"
           style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #f5f5f5;">
           <div style="flex:1;">
             <div style="font-size:15px;font-weight:500;">{{ p.name }}</div>
