@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { IconTournament, IconPlus, IconList, IconUsers, IconTrophy, IconChevronRight } from '@tabler/icons-vue'
 import FunMatchPlay, { type FunMatchItem } from '../components/FunMatchPlay.vue'
+import FunMatchHonors from '../components/FunMatchHonors.vue'
 import { api, type Player } from '../api'
 
 interface FunSessionSummary {
@@ -409,6 +410,9 @@ function playerById(id: number): FunPlayer | undefined {
             <div>总分数 男{{ currentSession.male_points }}:{{ currentSession.female_points }}女</div>
           </div>
         </div>
+
+        <!-- 赛事荣誉 -->
+        <FunMatchHonors :matches="currentSession.matches" :players="currentSession.players" :show="currentSession.status==='completed'" />
 
         <!-- Player performance in this session -->
         <div v-if="teamPlayers('male').length > 0" style="margin:8px 16px 4px;">
