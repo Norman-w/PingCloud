@@ -37,6 +37,8 @@ type FunSessionPlayer struct {
 	CurrentRating   int    `json:"current_rating"`
 	ReferenceRating int    `json:"reference_rating"`
 	Team            string `json:"team"`
+	Wins            int    `json:"wins"`
+	Losses          int    `json:"losses"`
 }
 
 type FunDrawRecord struct {
@@ -82,10 +84,14 @@ type FunSessionDetail struct {
 	FemaleGameWins int                `json:"female_game_wins"`
 	MalePoints     int                `json:"male_points"`
 	FemalePoints   int                `json:"female_points"`
+	TopPlayerID    int                `json:"top_player_id"`
+	TopPlayerName  string             `json:"top_player_name"`
 	CreatedAt      string             `json:"created_at"`
 	Players        []FunSessionPlayer `json:"players"`
 	Matches        []FunMatchInfo     `json:"matches"`
 }
+
+type pair struct{ m, f int }
 
 // 9-card types (unlimited draws, no consumption)
 var cardTypes = []struct {
@@ -101,6 +107,21 @@ var cardTypes = []struct {
 	{"spin", nil, "backspin"},
 	{"table", nil, "left"},
 	{"table", nil, "right"},
+	{"defense", nil, ""},
+}
+
+// 7-card types for wheel_rr: generic spin/table cards (low-rated player specifies details)
+var wheelCardTypes = []struct {
+	Type   string
+	Value  *int
+	Detail string
+}{
+	{"handicap", intPtr(2), ""},
+	{"handicap", intPtr(3), ""},
+	{"handicap", intPtr(4), ""},
+	{"handicap", intPtr(5), ""},
+	{"spin", nil, ""},
+	{"table", nil, ""},
 	{"defense", nil, ""},
 }
 
@@ -197,17 +218,12 @@ func CreateFunSession(w http.ResponseWriter, r *http.Request) {
 	n := len(males)
 	m := len(females)
 
-	type pair struct{ m, f int }
 	var allPairs []pair
 
-	if req.Mode == "pimple_rr" || (n > 0 && m == 0) {
-		// Single group round-robin: everyone plays everyone
-		for i := 0; i < n; i++ {
-			for j := i + 1; j < n; j++ {
-				allPairs = append(allPairs, pair{males[i], males[j]})
-			}
-		}
-		rand.Shuffle(len(allPairs), func(i, j int) { allPairs[i], allPairs[j] = allPairs[j], allPairs[i] })
+	if req.Mode == "pimple_rr" || req.Mode == "wheel_rr" || (n > 0 && m == 0) {
+		// Single group round-robin using circle method for fair scheduling
+		// Each round: every player plays at most once, even rest intervals
+		allPairs = generateFunRoundRobin(males)
 	} else {
 		// Default: cross-team round-robin
 		type rpair struct{ m, f int }
@@ -274,14 +290,19 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prows, err := db.DB.Query(
-		`SELECT p.id, p.name, p.current_rating, COALESCE(p.reference_rating,0), fsp.team
+		`SELECT p.id, p.name, p.current_rating, COALESCE(p.reference_rating,0), fsp.team,
+			COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false THEN 1 ELSE 0 END), 0) AS wins,
+			COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS losses
 		FROM fun_session_players fsp JOIN players p ON p.id = fsp.player_id
-		WHERE fsp.session_id = $1 ORDER BY fsp.team, p.name`, sessionID)
+		LEFT JOIN fun_matches fm ON (fm.male_player_id = p.id OR fm.female_player_id = p.id) AND fm.session_id = $1
+		WHERE fsp.session_id = $1
+		GROUP BY p.id, p.name, p.current_rating, p.reference_rating, fsp.team
+		ORDER BY wins DESC, p.reference_rating DESC, p.name`, sessionID)
 	if err == nil {
 		defer prows.Close()
 		for prows.Next() {
 			var p FunSessionPlayer
-			prows.Scan(&p.ID, &p.Name, &p.CurrentRating, &p.ReferenceRating, &p.Team)
+			prows.Scan(&p.ID, &p.Name, &p.CurrentRating, &p.ReferenceRating, &p.Team, &p.Wins, &p.Losses)
 			detail.Players = append(detail.Players, p)
 		}
 	}
@@ -420,8 +441,16 @@ func DrawFunCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Random draw from 9 card types (no consumption, unlimited draws)
-	c := cardTypes[rand.Intn(len(cardTypes))]
+	// Pick card set based on mode: wheel_rr uses generic spin/table cards
+	cards := cardTypes
+	var sessionMode string
+	db.DB.QueryRow(`SELECT COALESCE(mode,'gender') FROM fun_sessions WHERE id=$1`, sessionID).Scan(&sessionMode)
+	if sessionMode == "wheel_rr" {
+		cards = wheelCardTypes
+	}
+
+	// Random draw (no consumption, unlimited draws)
+	c := cards[rand.Intn(len(cards))]
 
 	// Cancel all previous draws for this match
 	db.DB.Exec(`UPDATE fun_match_draws SET cancelled=true WHERE match_id=$1`, matchID)
@@ -458,6 +487,11 @@ func ScoreFunMatch(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID, _ := strconv.Atoi(parts[0])
 	matchID, _ := strconv.Atoi(parts[2])
+
+	// Check if this is a wheel_rr (individual) session — skip team stat updates if so
+	var sessionMode string
+	db.DB.QueryRow(`SELECT COALESCE(mode,'gender') FROM fun_sessions WHERE id=$1`, sessionID).Scan(&sessionMode)
+	isWheel := sessionMode == "wheel_rr"
 
 	var req struct {
 		Game1ScoreMale   int  `json:"game1_score_male"`
@@ -541,8 +575,8 @@ func ScoreFunMatch(w http.ResponseWriter, r *http.Request) {
 	tx.QueryRow(`SELECT played, winner_team, game1_score_male, game1_score_female, game2_score_male, game2_score_female, game3_score_male, game3_score_female FROM fun_matches WHERE id=$1 FOR UPDATE`, matchID).
 		Scan(&wasPlayed, &oldWinnerTeam, &oldG1m, &oldG1f, &oldG2m, &oldG2f, &oldG3m, &oldG3f)
 
-	// Undo old stats if previously scored
-	if wasPlayed && oldWinnerTeam.String != "" {
+	// Undo old stats if previously scored (skip for wheel_rr — no team stats)
+	if !isWheel && wasPlayed && oldWinnerTeam.String != "" {
 		if oldWinnerTeam.String == "male" {
 			tx.Exec(`UPDATE fun_sessions SET male_wins = GREATEST(male_wins - 1, 0) WHERE id=$1`, sessionID)
 		} else {
@@ -577,13 +611,16 @@ func ScoreFunMatch(w http.ResponseWriter, r *http.Request) {
 		winnerID, winnerTeam, matchID,
 	)
 
-	if winnerTeam == "male" {
-		tx.Exec(`UPDATE fun_sessions SET male_wins = male_wins + 1 WHERE id=$1`, sessionID)
-	} else {
-		tx.Exec(`UPDATE fun_sessions SET female_wins = female_wins + 1 WHERE id=$1`, sessionID)
+	// Team stats update (skip for wheel_rr — individual standings computed from matches)
+	if !isWheel {
+		if winnerTeam == "male" {
+			tx.Exec(`UPDATE fun_sessions SET male_wins = male_wins + 1 WHERE id=$1`, sessionID)
+		} else {
+			tx.Exec(`UPDATE fun_sessions SET female_wins = female_wins + 1 WHERE id=$1`, sessionID)
+		}
+		tx.Exec(`UPDATE fun_sessions SET male_game_wins = male_game_wins + $1, female_game_wins = female_game_wins + $2, male_points = male_points + $3, female_points = female_points + $4 WHERE id=$5`,
+			newMaleGames, newFemaleGames, newMalePoints, newFemalePoints, sessionID)
 	}
-	tx.Exec(`UPDATE fun_sessions SET male_game_wins = male_game_wins + $1, female_game_wins = female_game_wins + $2, male_points = male_points + $3, female_points = female_points + $4 WHERE id=$5`,
-		newMaleGames, newFemaleGames, newMalePoints, newFemalePoints, sessionID)
 
 	if err := tx.Commit(); err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
 
@@ -607,13 +644,20 @@ func CompleteFunSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var maleWins, femaleWins int
-	db.DB.QueryRow(`SELECT male_wins, female_wins FROM fun_sessions WHERE id=$1`, sessionID).Scan(&maleWins, &femaleWins)
+	var sessionMode string
+	db.DB.QueryRow(`SELECT COALESCE(mode,'gender') FROM fun_sessions WHERE id=$1`, sessionID).Scan(&sessionMode)
+
 	winningTeam := ""
-	if maleWins > femaleWins {
-		winningTeam = "male"
-	} else if femaleWins > maleWins {
-		winningTeam = "female"
+	if sessionMode == "wheel_rr" {
+		winningTeam = "individual"
+	} else {
+		var maleWins, femaleWins int
+		db.DB.QueryRow(`SELECT male_wins, female_wins FROM fun_sessions WHERE id=$1`, sessionID).Scan(&maleWins, &femaleWins)
+		if maleWins > femaleWins {
+			winningTeam = "male"
+		} else if femaleWins > maleWins {
+			winningTeam = "female"
+		}
 	}
 
 	_, err := db.DB.Exec(
@@ -629,3 +673,53 @@ func CompleteFunSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func intPtr(v int) *int { return &v }
+
+// generateFunRoundRobin creates a round-robin schedule using the circle method.
+// Ensures fair scheduling: each player plays at most once per round, even rest intervals.
+// Returns pairs as (male_player_id, female_player_id) for fun_matches insertion.
+func generateFunRoundRobin(playerIDs []int) []pair {
+	n := len(playerIDs)
+	if n < 2 {
+		return nil
+	}
+
+	// Use circle method: fix first player, rotate the rest
+	ids := make([]int, n)
+	copy(ids, playerIDs)
+
+	// If odd, add a dummy bye spot (0)
+	hasBye := n%2 != 0
+	if hasBye {
+		ids = append(ids, 0)
+		n++
+	}
+
+	var result []pair
+	half := n / 2
+
+	for r := 0; r < n-1; r++ {
+		for i := 0; i < half; i++ {
+			a := ids[i]
+			b := ids[n-1-i]
+
+			if a == 0 || b == 0 {
+				continue // bye
+			}
+
+			// Alternate home/away for variety
+			if i%2 == 1 {
+				a, b = b, a
+			}
+			result = append(result, pair{a, b})
+		}
+
+		// Rotate: fix first element, shift the rest right
+		last := ids[n-1]
+		for i := n - 1; i > 1; i-- {
+			ids[i] = ids[i-1]
+		}
+		ids[1] = last
+	}
+
+	return result
+}
