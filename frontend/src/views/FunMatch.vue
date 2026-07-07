@@ -301,7 +301,7 @@ function playerById(id: number): FunPlayer | undefined {
         <div style="padding:8px 16px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button v-for="m in [{v:'gender',l:'男女对抗'},{v:'rubber',l:'胶皮大战'},{v:'pimple_rr',l:'全颗粒大循环'},{v:'wheel_rr',l:'车轮战'}]" :key="m.v"
-              @click="matchMode=m.v; if(m.v==='rubber'){}"
+              @click="matchMode=m.v; if(m.v==='wheel_rr'||m.v==='pimple_rr') femaleIDs=new Set()"
               style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid;font-size:13px;font-weight:600;cursor:pointer;text-align:center;min-width:0;"
               :style="matchMode===m.v?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'#fff',color:'#666',borderColor:'#ddd'}">
               {{ m.l }}</button>
@@ -317,7 +317,7 @@ function playerById(id: number): FunPlayer | undefined {
         <div style="background: #fff; border-radius: 12px; margin: 4px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden;">
           <div v-for="p in players" :key="'m'+p.id" @click="toggleMale(p.id)"
             style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f5f5f5; cursor: pointer;"
-            :style="{ background: maleIDs.has(p.id) ? '#e8f4ff' : '#fff', opacity: femaleIDs.has(p.id) ? 0.4 : 1 }">
+            :style="{ background: maleIDs.has(p.id) ? '#e8f4ff' : '#fff', opacity: !isSingleGroup && femaleIDs.has(p.id) ? 0.4 : 1 }">
             <input type="checkbox" :checked="maleIDs.has(p.id)" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #1989fa;" />
             <div style="flex: 1;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }}</div>
