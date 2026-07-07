@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { IconChartBar, IconList } from '@tabler/icons-vue'
 import ScoreDialog from './ScoreDialog.vue'
 import AddPlayerDialog from './AddPlayerDialog.vue'
-import { sessionDisplayRating, changeSign, type SessionDetail, type SessionMatch } from '../session-utils'
+import PlayerStandings from './PlayerStandings.vue'
+import { sessionDisplayRating, sessionChange, changeSign, type SessionDetail, type SessionMatch } from '../session-utils'
 import type { Player } from '../api'
 
-defineProps<{
+const props = defineProps<{
   session: SessionDetail
   players: Player[]
   showEditDialog: boolean
@@ -13,6 +15,16 @@ defineProps<{
   showAddPlayerDialog: boolean
   addPlayerId: number
 }>()
+
+const standingPlayers = computed(() => props.session.players.map(p => ({
+  id: p.id,
+  name: p.name,
+  wins: p.wins,
+  losses: p.losses,
+  forfeits: p.forfeits,
+  rating: sessionDisplayRating(p, props.session.matches),
+  ratingChange: sessionChange(props.session.matches, p.id),
+})))
 
 const emit = defineEmits<{
   (e: 'update:showEditDialog', v: boolean): void
@@ -44,22 +56,7 @@ const emit = defineEmits<{
     </div>
 
     <!-- Live standings -->
-    <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;gap:6px;">
-      <IconChartBar :size="18" :stroke-width="2" style="vertical-align:-3px;" />
-      实时排名
-    </div>
-    <div style="background:#fff;border-radius:12px;margin:4px 16px 12px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden;">
-      <div v-for="(p,i) in session.players" :key="p.id"
-        style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #f5f5f5;">
-        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;"
-          :style="{background:i===0?'#fff3cd':i===1?'#e8e8e8':i===2?'#ffe8d6':'#f0f2f5',color:i===0?'#b8860b':i===1?'#666':i===2?'#b87333':'#969799'}">{{ i+1 }}</div>
-        <div style="flex:1;margin-left:12px;">
-          <div style="font-size:16px;font-weight:500;">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ i+1 }}</span></div>
-          <div style="font-size:12px;color:#969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
-        </div>
-        <div style="font-size:18px;font-weight:700;color:#1989fa;">{{ sessionDisplayRating(p, session.matches) }}</div>
-      </div>
-    </div>
+    <PlayerStandings title="实时排名" :players="standingPlayers" />
 
     <!-- Match list -->
     <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;gap:6px;">

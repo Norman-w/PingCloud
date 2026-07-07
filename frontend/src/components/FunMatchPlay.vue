@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { IconList } from '@tabler/icons-vue'
 import FunScoreDialog from './FunScoreDialog.vue'
 import FunCardDraw from './FunCardDraw.vue'
+import PlayerStandings from './PlayerStandings.vue'
 
 export interface FunDrawRecord {
   id: number
@@ -34,6 +35,7 @@ export interface FunMatchItem {
 }
 
 const props = defineProps<{
+  mode: string
   sessionName: string
   sessionId: number
   maleWins: number
@@ -59,6 +61,37 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'cancelSession'): void
 }>()
+
+// Individual standings for wheel_rr mode
+const isWheel = computed(() => props.mode === 'wheel_rr')
+
+const individualStandings = computed(() => {
+  if (!isWheel.value) return []
+  const stats = new Map<number, { id: number; name: string; rating: number; wins: number; losses: number }>()
+  for (const p of props.sessionPlayers) {
+    stats.set(p.id, { id: p.id, name: '', rating: p.reference_rating > 0 ? p.reference_rating : p.current_rating, wins: 0, losses: 0 })
+  }
+  for (const m of props.matches) {
+    if (!m.played) continue
+    const a = stats.get(m.male_player_id)
+    const b = stats.get(m.female_player_id)
+    if (a) { a.name = m.male_player_name; if (m.winner_id === m.male_player_id) a.wins++; else a.losses++ }
+    if (b) { b.name = m.female_player_name; if (m.winner_id === m.female_player_id) b.wins++; else b.losses++ }
+  }
+  // Also fill names from sessionPlayers for any missing
+  for (const p of props.sessionPlayers) {
+    const s = stats.get(p.id)
+    if (s && !s.name) s.name = '' // fallback
+  }
+  return Array.from(stats.values()).filter(s => s.wins + s.losses > 0 || stats.size <= props.sessionPlayers.length)
+    .sort((a, b) => b.wins - a.wins || b.rating - a.rating)
+})
+
+function playerRating(pid: number): number {
+  const p = props.sessionPlayers.find(sp => sp.id === pid)
+  if (!p) return 0
+  return p.reference_rating > 0 ? p.reference_rating : p.current_rating
+}
 
 // Card draw state
 const showCardDraw = ref(false)
@@ -174,8 +207,8 @@ function drawColor(d: FunDrawRecord): string {
       </div>
     </div>
 
-    <!-- Team Score Banner -->
-    <div style="padding:12px 16px;background:#fff;margin:0 16px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+    <!-- Team Score Banner (non-wheel modes) -->
+    <div v-if="!isWheel" style="padding:12px 16px;background:#fff;margin:0 16px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
       <div style="display:flex;align-items:center;justify-content:center;gap:20px;">
         <div style="text-align:center;">
           <div style="font-size:12px;color:#969799;">男队</div>
@@ -192,6 +225,9 @@ function drawColor(d: FunDrawRecord): string {
         <span>分数 {{ malePoints }}:{{ femalePoints }}</span>
       </div>
     </div>
+
+    <!-- Individual Standings (wheel_rr mode) -->
+    <PlayerStandings v-if="isWheel" title="实时排名" :players="individualStandings" rating-label="开球网参考积分" />
 
     <!-- Match list -->
     <div style="font-size:16px;font-weight:600;padding:16px 16px 8px;display:flex;align-items:center;gap:6px;">
@@ -218,7 +254,7 @@ function drawColor(d: FunDrawRecord): string {
         <div @click="emit('openScoreEditor', m)" style="display:flex;align-items:center;cursor:pointer;">
           <div style="flex:1;text-align:right;font-weight:400;"
             :style="{fontWeight: m.winner_id === m.male_player_id ? 700 : 400}">
-            {{ m.male_player_name }}
+            {{ m.male_player_name }}<span v-if="isWheel" style="font-size:10px;color:#969799;display:block;">{{ playerRating(m.male_player_id) }}</span>
           </div>
           <div style="width:120px;text-align:center;font-weight:700;font-size:14px;">
             <template v-if="m.played">
@@ -232,7 +268,7 @@ function drawColor(d: FunDrawRecord): string {
           </div>
           <div style="flex:1;font-weight:400;"
             :style="{fontWeight: m.winner_id === m.female_player_id ? 700 : 400}">
-            {{ m.female_player_name }}
+            {{ m.female_player_name }}<span v-if="isWheel" style="font-size:10px;color:#969799;display:block;">{{ playerRating(m.female_player_id) }}</span>
           </div>
         </div>
       </div>

@@ -7,7 +7,7 @@ import FunMatchHonors from '../components/FunMatchHonors.vue'
 import { api, type Player } from '../api'
 
 interface FunSessionSummary {
-  id: number; name: string; male_count: number; female_count: number
+  id: number; name: string; mode: string; male_count: number; female_count: number
   status: string; male_wins: number; female_wins: number
   male_game_wins: number; female_game_wins: number
   male_points: number; female_points: number
@@ -16,13 +16,15 @@ interface FunSessionSummary {
 
 interface FunPlayer {
   id: number; name: string; current_rating: number; reference_rating: number; team: string
+  wins: number; losses: number
 }
 
 interface FunSessionDetail {
-  id: number; name: string; male_count: number; female_count: number
+  id: number; name: string; mode: string; male_count: number; female_count: number
   status: string; winning_team: string; male_wins: number; female_wins: number
   male_game_wins: number; female_game_wins: number
   male_points: number; female_points: number
+  top_player_id: number; top_player_name: string
   created_at: string; players: FunPlayer[]; matches: FunMatchItem[]
 }
 
@@ -35,10 +37,12 @@ const maleIDs = ref<Set<number>>(new Set())
 const femaleIDs = ref<Set<number>>(new Set())
 const sessionName = ref('')
 
-const isPimpleRR = computed(() => matchMode.value === 'pimple_rr')
+const isSingleGroup = computed(() => matchMode.value === 'pimple_rr' || matchMode.value === 'wheel_rr')
+const isWheelRR = computed(() => matchMode.value === 'wheel_rr')
 const teamLabels = computed(() => {
   if (matchMode.value === 'rubber') return { a:'双反队', b:'颗粒队', ta:'反胶', tb:'颗粒' }
   if (matchMode.value === 'pimple_rr') return { a:'颗粒组', b:'', ta:'颗粒', tb:'' }
+  if (matchMode.value === 'wheel_rr') return { a:'参赛选手', b:'', ta:'选手', tb:'' }
   return { a:'男队', b:'女队', ta:'男', tb:'女' }
 })
 
@@ -81,12 +85,17 @@ function toggleFemale(id: number) {
 }
 
 function goConfirm() {
+  if (isWheelRR.value && maleIDs.value.size < 2) { showToast('车轮战至少选 2 人'); return }
   if (maleIDs.value.size === 0) { showToast('请至少选择1人'); return }
-  if (!isPimpleRR.value && femaleIDs.value.size === 0) { showToast('请至少选择1人'); return }
+  if (!isSingleGroup.value && femaleIDs.value.size === 0) { showToast('请至少选择1人'); return }
   if (!sessionName.value.trim()) {
     const mNames = Array.from(maleIDs.value).map(id => players.value.find(p => p.id === id)?.name).filter(Boolean)
     const fNames = Array.from(femaleIDs.value).map(id => players.value.find(p => p.id === id)?.name).filter(Boolean)
-    sessionName.value = mNames.join('、') + ' VS ' + fNames.join('、')
+    if (isWheelRR.value) {
+      sessionName.value = mNames.join('、') + ' 车轮战'
+    } else {
+      sessionName.value = mNames.join('、') + ' VS ' + fNames.join('、')
+    }
   }
   step.value = 'confirm'
 }
@@ -235,7 +244,7 @@ function playerById(id: number): FunPlayer | undefined {
           趣味赛
         </div>
         <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">
-          {{ step === 'list' ? '趣味团体赛' : step === 'select' ? `选${teamLabels.a}和${teamLabels.b}` : step === 'confirm' ? '确认对阵信息' : step === 'play' ? '逐场录入比分' : '比赛结果' }}
+          {{ step === 'list' ? '趣味团体赛' : step === 'select' ? (isWheelRR ? '选择参赛选手' : `选${teamLabels.a}和${teamLabels.b}`) : step === 'confirm' ? '确认对阵信息' : step === 'play' ? '逐场录入比分' : '比赛结果' }}
         </div>
       </div>
 
@@ -263,10 +272,16 @@ function playerById(id: number): FunPlayer | undefined {
             <div>
               <div style="font-weight: 600; font-size: 16px;">{{ s.name }}</div>
               <div style="font-size: 13px; color: #969799; margin-top: 2px;">
-                男{{ s.male_count }}人 vs 女{{ s.female_count }}人 · {{ s.match_count }} 场
+                <template v-if="s.mode === 'wheel_rr'">车轮战 · {{ s.male_count }}人 · {{ s.match_count }} 场</template>
+                <template v-else>男{{ s.male_count }}人 vs 女{{ s.female_count }}人 · {{ s.match_count }} 场</template>
               </div>
               <div style="font-size: 13px; font-weight: 600; margin-top: 2px;" :style="{color: s.status === 'completed' ? (s.male_wins > s.female_wins ? '#1989fa' : '#ee0a24') : '#969799'}">
-                {{ s.status === 'completed' ? `男 ${s.male_wins} : ${s.female_wins} 女` : `已完 ${s.match_count - s.unplayed_count}/${s.match_count}` }}
+                <template v-if="s.mode === 'wheel_rr'">
+                  {{ s.status === 'completed' ? `车轮战 · 共${s.match_count}场` : `已完 ${s.match_count - s.unplayed_count}/${s.match_count}` }}
+                </template>
+                <template v-else>
+                  {{ s.status === 'completed' ? `男 ${s.male_wins} : ${s.female_wins} 女` : `已完 ${s.match_count - s.unplayed_count}/${s.match_count}` }}
+                </template>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -285,7 +300,7 @@ function playerById(id: number): FunPlayer | undefined {
         <!-- Mode selector -->
         <div style="padding:8px 16px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button v-for="m in [{v:'gender',l:'男女对抗'},{v:'rubber',l:'胶皮大战'},{v:'pimple_rr',l:'全颗粒大循环'}]" :key="m.v"
+            <button v-for="m in [{v:'gender',l:'男女对抗'},{v:'rubber',l:'胶皮大战'},{v:'pimple_rr',l:'全颗粒大循环'},{v:'wheel_rr',l:'车轮战'}]" :key="m.v"
               @click="matchMode=m.v; if(m.v==='rubber'){}"
               style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid;font-size:13px;font-weight:600;cursor:pointer;text-align:center;min-width:0;"
               :style="matchMode===m.v?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'#fff',color:'#666',borderColor:'#ddd'}">
@@ -306,13 +321,13 @@ function playerById(id: number): FunPlayer | undefined {
             <input type="checkbox" :checked="maleIDs.has(p.id)" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #1989fa;" />
             <div style="flex: 1;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }}</div>
-              <div style="font-size: 13px; color: #969799;">{{ p.current_rating }} 分</div>
+              <div style="font-size: 13px; color: #969799;">{{ isWheelRR ? (p.reference_rating || p.current_rating) : p.current_rating }} 分</div>
             </div>
           </div>
         </div>
 
         <!-- Female / Team B (hidden for single-group mode) -->
-        <template v-if="!isPimpleRR">
+        <template v-if="!isSingleGroup">
         <div style="font-size: 16px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 6px; margin-top: 8px;">
           <IconUsers :size="18" :stroke-width="2" style="vertical-align: -3px; color: #ee0a24;" />
           {{ teamLabels.b }}（已选 {{ femaleIDs.size }} 人）
@@ -324,24 +339,25 @@ function playerById(id: number): FunPlayer | undefined {
             <input type="checkbox" :checked="femaleIDs.has(p.id)" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #ee0a24;" />
             <div style="flex: 1;">
               <div style="font-size: 16px; font-weight: 500;">{{ p.name }}</div>
-              <div style="font-size: 13px; color: #969799;">{{ p.current_rating }} 分</div>
+              <div style="font-size: 13px; color: #969799;">{{ isWheelRR ? (p.reference_rating || p.current_rating) : p.current_rating }} 分</div>
             </div>
           </div>
         </div>
 
+        </template>
+
         <div style="padding: 16px;">
           <input v-model="sessionName" placeholder="趣味赛名称（例：移动杯第二届）"
             style="width: 100%; padding: 14px; border: 1px solid #ebedf0; border-radius: 12px; font-size: 15px; outline: none; margin-bottom: 16px; box-sizing: border-box;" />
-          <button :disabled="isPimpleRR ? maleIDs.size<2 : (maleIDs.size===0||femaleIDs.size===0)" @click="isPimpleRR?goConfirm():(goConfirm())"
+          <button :disabled="isSingleGroup ? maleIDs.size<2 : (maleIDs.size===0||femaleIDs.size===0)" @click="goConfirm()"
             style="width: 100%; padding: 16px; background: linear-gradient(135deg, #ff6b9d, #c44569); color: #fff; border: none; border-radius: 24px; font-size: 17px; font-weight: 600; cursor: pointer;"
-            :style="{ opacity: (isPimpleRR ? maleIDs.size<2 : (maleIDs.size===0||femaleIDs.size===0)) ? 0.5 : 1 }">
-            下一步（{{ isPimpleRR ? `已选${maleIDs.size}人` : `${teamLabels.ta}${maleIDs.size}人 ${teamLabels.tb}${femaleIDs.size}人` }}）
+            :style="{ opacity: (isSingleGroup ? maleIDs.size<2 : (maleIDs.size===0||femaleIDs.size===0)) ? 0.5 : 1 }">
+            下一步（{{ isSingleGroup ? `已选${maleIDs.size}人` : `${teamLabels.ta}${maleIDs.size}人 ${teamLabels.tb}${femaleIDs.size}人` }}）
           </button>
           <div style="text-align: center; margin-top: 12px;">
             <button @click="step = 'list'" style="background: none; border: none; color: #969799; font-size: 14px; cursor: pointer;">返回列表</button>
           </div>
         </div>
-        </template>
 
       </template>
 
@@ -355,14 +371,19 @@ function playerById(id: number): FunPlayer | undefined {
           <div style="font-weight: 600; margin-bottom: 12px; font-size: 16px;">{{ sessionName }}</div>
           <div style="margin-bottom: 8px;">
             <span style="font-size: 14px; color: #1989fa; font-weight: 600;">{{ teamLabels.a }} ({{ maleIDs.size }}人): </span>
-            <span v-for="p in selectedMalePlayers()" :key="p.id" style="font-size: 14px; padding: 4px 8px; background: #e8f4ff; color: #1989fa; border-radius: 6px; margin: 2px; display: inline-block;">{{ p.name }} ({{ p.current_rating }})</span>
+            <span v-for="p in selectedMalePlayers()" :key="p.id" style="font-size: 14px; padding: 4px 8px; background: #e8f4ff; color: #1989fa; border-radius: 6px; margin: 2px; display: inline-block;">{{ p.name }} ({{ isWheelRR ? (p.reference_rating || p.current_rating) : p.current_rating }})</span>
           </div>
-          <div style="margin-bottom: 8px;">
+          <div v-if="!isSingleGroup" style="margin-bottom: 8px;">
             <span style="font-size: 14px; color: #ee0a24; font-weight: 600;">{{ teamLabels.b }} ({{ femaleIDs.size }}人): </span>
             <span v-for="p in selectedFemalePlayers()" :key="p.id" style="font-size: 14px; padding: 4px 8px; background: #fde8ef; color: #ee0a24; border-radius: 6px; margin: 2px; display: inline-block;">{{ p.name }} ({{ p.current_rating }})</span>
           </div>
           <div style="margin-top: 12px; font-size: 13px; color: #969799;">
-            每位{{ teamLabels.ta }}队员 VS 每位{{ teamLabels.tb }}队员，共 {{ maleIDs.size * femaleIDs.size }} 场比赛<br/>
+            <template v-if="isWheelRR">
+              循环赛（每人互相打一场），共 {{ maleIDs.size * (maleIDs.size - 1) / 2 }} 场比赛<br/>
+            </template>
+            <template v-else>
+              每位{{ teamLabels.ta }}队员 VS 每位{{ teamLabels.tb }}队员，共 {{ maleIDs.size * femaleIDs.size }} 场比赛<br/>
+            </template>
             分差≥50分触发趣味抽卡机制
           </div>
         </div>
@@ -381,6 +402,7 @@ function playerById(id: number): FunPlayer | undefined {
       <!-- ===== PLAY ===== -->
       <template v-if="step === 'play' && currentSession">
         <FunMatchPlay
+          :mode="currentSession.mode || matchMode"
           :session-name="currentSession.name"
           :session-id="currentSession.id"
           :male-wins="currentSession.male_wins"
@@ -409,35 +431,72 @@ function playerById(id: number): FunPlayer | undefined {
         <div style="background: #fff; border-radius: 12px; padding: 20px; margin: 12px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);">
           <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
             <IconTrophy :size="22" :stroke-width="2"
-              :style="{color: currentSession.winning_team === 'male' ? '#1989fa' : '#ee0a24'}" />
+              :style="{color: currentSession.winning_team === 'male' ? '#1989fa' : currentSession.winning_team === 'female' ? '#ee0a24' : '#f5a623'}" />
             <span style="font-weight: 700; font-size: 20px;">{{ currentSession.name }}</span>
           </div>
-          <!-- Big score -->
-          <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;">
-            <div style="text-align:center;" :style="{opacity: currentSession.winning_team === 'female' ? 0.3 : 1}">
-              <div style="font-size:12px;color:#969799;">男队</div>
-              <div style="font-size:48px;font-weight:800;color:#1989fa;">{{ currentSession.male_wins }}</div>
+          <!-- Wheel mode: show top player -->
+          <template v-if="currentSession.mode === 'wheel_rr'">
+            <div style="text-align:center;margin-top:12px;">
+              <div style="font-size:13px;color:#969799;">最终排名</div>
             </div>
-            <div style="font-size:24px;font-weight:800;color:#c8c9cc;">:</div>
-            <div style="text-align:center;" :style="{opacity: currentSession.winning_team === 'male' ? 0.3 : 1}">
-              <div style="font-size:12px;color:#969799;">女队</div>
-              <div style="font-size:48px;font-weight:800;color:#ee0a24;">{{ currentSession.female_wins }}</div>
+            <div style="margin-top:8px;">
+              <div v-for="(p, i) in currentSession.players" :key="p.id"
+                style="display:flex;align-items:center;padding:10px 0;"
+                :style="{opacity: i === 0 ? 1 : 0.8}">
+                <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;"
+                  :style="{background:i===0?'#fff3cd':i===1?'#e8e8e8':i===2?'#ffe8d6':'#f0f2f5',color:i===0?'#b8860b':i===1?'#666':i===2?'#b87333':'#969799'}">{{ i + 1 }}</div>
+                <div style="flex:1;margin-left:12px;">
+                  <div style="font-size:16px;font-weight:500;" :style="{fontWeight: i===0 ? 700 : 500}">{{ p.name }}
+                    <span v-if="i === 0" style="font-size:12px;color:#f5a623;margin-left:4px;">🏆</span>
+                  </div>
+                  <div style="font-size:12px;color:#969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
+                </div>
+                <div style="font-size:14px;font-weight:600;color:#1989fa;">{{ p.reference_rating || p.current_rating }} 分</div>
+              </div>
             </div>
-          </div>
-          <div style="font-size: 13px; color: #969799; margin-top: 4px; text-align: center;">
-            {{ currentSession.winning_team === 'male' ? '男队获胜！' : currentSession.winning_team === 'female' ? '女队获胜！' : '平局' }}
-          </div>
-          <!-- Detailed stats -->
-          <div style="display:flex;justify-content:center;gap:24px;margin-top:12px;font-size:12px;color:#666;">
-            <div>总局数 男{{ currentSession.male_game_wins }}:{{ currentSession.female_game_wins }}女</div>
-            <div>总分数 男{{ currentSession.male_points }}:{{ currentSession.female_points }}女</div>
-          </div>
+          </template>
+          <!-- Team modes: show team score -->
+          <template v-else>
+            <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:16px;">
+              <div style="text-align:center;" :style="{opacity: currentSession.winning_team === 'female' ? 0.3 : 1}">
+                <div style="font-size:12px;color:#969799;">男队</div>
+                <div style="font-size:48px;font-weight:800;color:#1989fa;">{{ currentSession.male_wins }}</div>
+              </div>
+              <div style="font-size:24px;font-weight:800;color:#c8c9cc;">:</div>
+              <div style="text-align:center;" :style="{opacity: currentSession.winning_team === 'male' ? 0.3 : 1}">
+                <div style="font-size:12px;color:#969799;">女队</div>
+                <div style="font-size:48px;font-weight:800;color:#ee0a24;">{{ currentSession.female_wins }}</div>
+              </div>
+            </div>
+            <div style="font-size: 13px; color: #969799; margin-top: 4px; text-align: center;">
+              {{ currentSession.winning_team === 'male' ? '男队获胜！' : currentSession.winning_team === 'female' ? '女队获胜！' : '平局' }}
+            </div>
+            <div style="display:flex;justify-content:center;gap:24px;margin-top:12px;font-size:12px;color:#666;">
+              <div>总局数 男{{ currentSession.male_game_wins }}:{{ currentSession.female_game_wins }}女</div>
+              <div>总分数 男{{ currentSession.male_points }}:{{ currentSession.female_points }}女</div>
+            </div>
+          </template>
         </div>
 
         <!-- 赛事荣誉 -->
         <FunMatchHonors :matches="currentSession.matches" :players="currentSession.players" :show="currentSession.status==='completed'" />
 
         <!-- Player performance in this session -->
+        <template v-if="currentSession.mode === 'wheel_rr'">
+          <div style="margin:8px 16px 4px;">
+            <div style="font-weight:600;font-size:14px;color:#1989fa;margin-bottom:4px;">选手战绩</div>
+            <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+              <div v-for="p in currentSession.players" :key="p.id"
+                style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid #f5f5f5;">
+                <span style="font-size:14px;font-weight:500;">{{ p.name }}</span>
+                <span style="font-size:12px;color:#969799;margin-left:8px;">开球网 {{ p.reference_rating || p.current_rating }}</span>
+                <span style="font-size:13px;margin-left:auto;"
+                  :style="{color: p.wins >= p.losses ? '#07c160' : '#ee0a24'}">{{ p.wins }}胜 {{ p.losses }}负</span>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
         <div v-if="teamPlayers('male').length > 0" style="margin:8px 16px 4px;">
           <div style="font-weight:600;font-size:14px;color:#1989fa;margin-bottom:4px;">男队本场战绩</div>
           <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
@@ -460,6 +519,7 @@ function playerById(id: number): FunPlayer | undefined {
             </div>
           </div>
         </div>
+        </template>
 
         <!-- All matches with card details -->
         <div style="font-size: 16px; font-weight: 600; padding: 16px 16px 8px;">全部对阵</div>
