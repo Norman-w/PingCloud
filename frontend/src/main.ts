@@ -16,6 +16,7 @@ const routes = [
   { path: '/headtohead', name: 'HeadToHead', component: () => import('./views/HeadToHead.vue') },
   { path: '/scoreboard', name: 'Scoreboard', component: () => import('./views/Scoreboard.vue') },
   { path: '/fun-match', name: 'FunMatch', component: () => import('./views/FunMatch.vue') },
+  { path: '/team-battle', name: 'TeamBattle', component: () => import('./views/TeamBattle.vue') },
   { path: '/admin/login', name: 'AdminLogin', component: () => import('./views/AdminLogin.vue') },
   { path: '/admin', name: 'Admin', component: () => import('./views/Admin.vue') },
 ]

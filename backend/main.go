@@ -378,6 +378,33 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Team battle routes
+	mux.HandleFunc("/api/team-battles/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		path := strings.TrimPrefix(r.URL.Path, "/api/team-battles/")
+		switch r.Method {
+		case http.MethodPost:
+			if strings.Contains(path, "/matches/") { handlers.ScoreTeamBattleMatch(w, r); return }
+			if path == "complete" || strings.HasSuffix(path, "/complete") { handlers.CompleteTeamBattle(w, r); return }
+			handlers.CreateTeamBattle(w, r)
+		case http.MethodDelete: handlers.DeleteTeamBattle(w, r)
+		case http.MethodGet:
+			if path == "" { handlers.GetTeamBattles(w, r); return }
+			handlers.GetTeamBattle(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/team-battles", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.GetTeamBattles(w, r)
+		case http.MethodPost: handlers.CreateTeamBattle(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Auth routes
 	mux.HandleFunc("/api/auth/send-code", func(w http.ResponseWriter, r *http.Request) {
 		cors(w)

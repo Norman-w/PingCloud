@@ -293,6 +293,7 @@ function playerById(id: number): FunPlayer | undefined {
           </div>
         </div>
 
+        <!-- Select players -->
         <!-- Male team -->
         <div style="font-size: 16px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 6px;">
           <IconUsers :size="18" :stroke-width="2" style="vertical-align: -3px; color: #1989fa;" />
@@ -331,9 +332,9 @@ function playerById(id: number): FunPlayer | undefined {
         <div style="padding: 16px;">
           <input v-model="sessionName" placeholder="趣味赛名称（例：移动杯第二届）"
             style="width: 100%; padding: 14px; border: 1px solid #ebedf0; border-radius: 12px; font-size: 15px; outline: none; margin-bottom: 16px; box-sizing: border-box;" />
-          <button :disabled="maleIDs.size === 0 || femaleIDs.size === 0" @click="goConfirm"
+          <button :disabled="isPimpleRR ? maleIDs.size<2 : (maleIDs.size===0||femaleIDs.size===0)" @click="isPimpleRR?goConfirm():(goConfirm())"
             style="width: 100%; padding: 16px; background: linear-gradient(135deg, #ff6b9d, #c44569); color: #fff; border: none; border-radius: 24px; font-size: 17px; font-weight: 600; cursor: pointer;"
-            :style="{ opacity: (maleIDs.size === 0 || femaleIDs.size === 0) ? 0.5 : 1 }">
+            :style="{ opacity: (isPimpleRR ? maleIDs.size<2 : (maleIDs.size===0||femaleIDs.size===0)) ? 0.5 : 1 }">
             下一步（{{ isPimpleRR ? `已选${maleIDs.size}人` : `${teamLabels.ta}${maleIDs.size}人 ${teamLabels.tb}${femaleIDs.size}人` }}）
           </button>
           <div style="text-align: center; margin-top: 12px;">
@@ -341,6 +342,7 @@ function playerById(id: number): FunPlayer | undefined {
           </div>
         </div>
         </template>
+
       </template>
 
       <!-- ===== CONFIRM ===== -->

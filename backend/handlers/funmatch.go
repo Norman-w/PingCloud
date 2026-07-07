@@ -151,6 +151,7 @@ func CreateFunSession(w http.ResponseWriter, r *http.Request) {
 		MalePlayerIDs   []int  `json:"male_player_ids"`
 		FemalePlayerIDs []int  `json:"female_player_ids"`
 	}
+	if req.Mode == "" { req.Mode = "gender" }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
@@ -191,48 +192,57 @@ func CreateFunSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Round-robin schedule between teams: each round every player plays at most once.
-	// Team A = males (n players), Team B = females (m players).
-	// Round k: female F[j] plays male M[(k + j) % n] for j = 0..m-1, k = 0..n-1.
-	// This covers all n*m cross-pairs with n rounds of m matches each.
 	males := req.MalePlayerIDs
 	females := req.FemalePlayerIDs
 	n := len(males)
 	m := len(females)
 
 	type pair struct{ m, f int }
-	var rounds [][]pair
+	var allPairs []pair
 
-	// If one team is larger, the smaller team rotates through the larger team
-	if n >= m {
-		for k := 0; k < n; k++ {
-			var round []pair
-			for j := 0; j < m; j++ {
-				round = append(round, pair{males[(k+j)%n], females[j]})
+	if req.Mode == "pimple_rr" || (n > 0 && m == 0) {
+		// Single group round-robin: everyone plays everyone
+		for i := 0; i < n; i++ {
+			for j := i + 1; j < n; j++ {
+				allPairs = append(allPairs, pair{males[i], males[j]})
 			}
-			// Shuffle within round so matches appear interleaved
-			rand.Shuffle(len(round), func(i, j int) { round[i], round[j] = round[j], round[i] })
-			rounds = append(rounds, round)
 		}
+		rand.Shuffle(len(allPairs), func(i, j int) { allPairs[i], allPairs[j] = allPairs[j], allPairs[i] })
 	} else {
-		for k := 0; k < m; k++ {
-			var round []pair
-			for j := 0; j < n; j++ {
-				round = append(round, pair{males[j], females[(k+j)%m]})
+		// Default: cross-team round-robin
+		type rpair struct{ m, f int }
+		var rounds [][]rpair
+		if n >= m {
+			for k := 0; k < n; k++ {
+				var round []rpair
+				for j := 0; j < m; j++ {
+					round = append(round, rpair{males[(k+j)%n], females[j]})
+				}
+				rand.Shuffle(len(round), func(i, j int) { round[i], round[j] = round[j], round[i] })
+				rounds = append(rounds, round)
 			}
-			rand.Shuffle(len(round), func(i, j int) { round[i], round[j] = round[j], round[i] })
-			rounds = append(rounds, round)
+		} else {
+			for k := 0; k < m; k++ {
+				var round []rpair
+				for j := 0; j < n; j++ {
+					round = append(round, rpair{males[j], females[(k+j)%m]})
+				}
+				rand.Shuffle(len(round), func(i, j int) { round[i], round[j] = round[j], round[i] })
+				rounds = append(rounds, round)
+			}
+		}
+		for _, round := range rounds {
+			for _, p := range round {
+				allPairs = append(allPairs, pair{p.m, p.f})
+			}
 		}
 	}
 
-	// Flatten rounds into insert order
-	for _, round := range rounds {
-		for _, p := range round {
-			_, err = tx.Exec(`INSERT INTO fun_matches (session_id, male_player_id, female_player_id) VALUES ($1, $2, $3)`, sessionID, p.m, p.f)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+	for _, p := range allPairs {
+		_, err = tx.Exec(`INSERT INTO fun_matches (session_id, male_player_id, female_player_id) VALUES ($1, $2, $3)`, sessionID, p.m, p.f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 
