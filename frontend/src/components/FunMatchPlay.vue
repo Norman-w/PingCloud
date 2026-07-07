@@ -45,7 +45,7 @@ const props = defineProps<{
   malePoints: number
   femalePoints: number
   matches: FunMatchItem[]
-  sessionPlayers: { id: number; current_rating: number; reference_rating: number }[]
+  sessionPlayers: { id: number; name: string; current_rating: number; reference_rating: number }[]
   showEditDialog: boolean
   scoringMatch: FunMatchItem | null
   drawingCard: boolean
@@ -69,19 +69,14 @@ const individualStandings = computed(() => {
   if (!isWheel.value) return []
   const stats = new Map<number, { id: number; name: string; rating: number; wins: number; losses: number }>()
   for (const p of props.sessionPlayers) {
-    stats.set(p.id, { id: p.id, name: '', rating: p.reference_rating > 0 ? p.reference_rating : p.current_rating, wins: 0, losses: 0 })
+    stats.set(p.id, { id: p.id, name: p.name, rating: p.reference_rating > 0 ? p.reference_rating : p.current_rating, wins: 0, losses: 0 })
   }
   for (const m of props.matches) {
     if (!m.played) continue
     const a = stats.get(m.male_player_id)
     const b = stats.get(m.female_player_id)
-    if (a) { a.name = m.male_player_name; if (m.winner_id === m.male_player_id) a.wins++; else a.losses++ }
-    if (b) { b.name = m.female_player_name; if (m.winner_id === m.female_player_id) b.wins++; else b.losses++ }
-  }
-  // Also fill names from sessionPlayers for any missing
-  for (const p of props.sessionPlayers) {
-    const s = stats.get(p.id)
-    if (s && !s.name) s.name = '' // fallback
+    if (a) { if (m.winner_id === m.male_player_id) a.wins++; else a.losses++ }
+    if (b) { if (m.winner_id === m.female_player_id) b.wins++; else b.losses++ }
   }
   return Array.from(stats.values()).filter(s => s.wins + s.losses > 0 || stats.size <= props.sessionPlayers.length)
     .sort((a, b) => b.wins - a.wins || b.rating - a.rating)
@@ -177,8 +172,8 @@ function matchWinnerName(m: FunMatchItem): string {
 function drawLabel(d: FunDrawRecord): string {
   switch (d.card_type) {
     case 'handicap': return `让${d.card_value}分`
-    case 'spin': return d.card_detail === 'topspin' ? '上旋' : '下旋'
-    case 'table': return d.card_detail === 'left' ? '左半台' : '右半台'
+    case 'spin': return d.card_detail === 'topspin' ? '上旋' : d.card_detail === 'backspin' ? '下旋' : '旋转'
+    case 'table': return d.card_detail === 'left' ? '左半台' : d.card_detail === 'right' ? '右半台' : '半台'
     case 'defense': return '防守'
     default: return '?'
   }
@@ -330,6 +325,7 @@ function drawColor(d: FunDrawRecord): string {
       :male-rating="drawMaleRating"
       :female-rating="drawFemaleRating"
       :drawing="drawingCard"
+      :mode="mode"
       :result="drawResult"
       @draw="handleCardDraw"
       @close="handleCardDrawClose"

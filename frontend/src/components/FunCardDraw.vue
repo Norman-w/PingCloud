@@ -16,6 +16,7 @@ const props = defineProps<{
   maleRating: number
   femaleRating: number
   drawing: boolean
+  mode?: string
   result: { card_type: string; card_value: number | null; card_detail: string } | null
 }>()
 
@@ -23,6 +24,16 @@ const emit = defineEmits<{
   (e: 'draw'): void
   (e: 'close'): void
 }>()
+
+const WHEEL_CARDS: CardDef[] = [
+  { id: 1, card_type: 'handicap', card_value: 2, card_detail: '', color: '#f5a623' },
+  { id: 2, card_type: 'handicap', card_value: 3, card_detail: '', color: '#f5a623' },
+  { id: 3, card_type: 'handicap', card_value: 4, card_detail: '', color: '#f5a623' },
+  { id: 4, card_type: 'handicap', card_value: 5, card_detail: '', color: '#f5a623' },
+  { id: 5, card_type: 'spin', card_value: null, card_detail: '', color: '#1989fa' },
+  { id: 6, card_type: 'table', card_value: null, card_detail: '', color: '#9b59b6' },
+  { id: 7, card_type: 'defense', card_value: null, card_detail: '', color: '#e74c3c' },
+]
 
 const ALL_CARDS: CardDef[] = [
   { id: 1, card_type: 'handicap', card_value: 2, card_detail: '', color: '#f5a623' },
@@ -35,6 +46,8 @@ const ALL_CARDS: CardDef[] = [
   { id: 8, card_type: 'table', card_value: null, card_detail: 'right', color: '#9b59b6' },
   { id: 9, card_type: 'defense', card_value: null, card_detail: '', color: '#e74c3c' },
 ]
+
+const activeCards = computed(() => props.mode === 'wheel_rr' ? WHEEL_CARDS : ALL_CARDS)
 
 const started = ref(false)
 const spinning = ref(false)
@@ -53,10 +66,10 @@ const circleRadius = 140
 const containerSize = circleRadius * 2 + 80 // enough for card + offset
 
 const cardPositions = computed(() => {
-  const count = ALL_CARDS.length
+  const count = activeCards.value.length
   const angleStep = (2 * Math.PI) / count
   const startAngle = -Math.PI / 2 // start from top
-  return ALL_CARDS.map((_, i) => {
+  return activeCards.value.map((_, i) => {
     const angle = startAngle + i * angleStep
     return {
       x: circleRadius * Math.cos(angle),
@@ -87,7 +100,7 @@ function tryReveal() {
 
 watch(() => props.result, (r) => {
   if (!r || !spinning.value) return
-  const idx = ALL_CARDS.findIndex(c =>
+  const idx = activeCards.value.findIndex(c =>
     c.card_type === r.card_type && c.card_value === r.card_value && c.card_detail === r.card_detail)
   if (idx < 0) return
 
@@ -104,8 +117,8 @@ watch(() => props.result, (r) => {
 function cardLabel(c: CardDef): string {
   switch (c.card_type) {
     case 'handicap': return `让${c.card_value}分`
-    case 'spin': return c.card_detail === 'topspin' ? '上旋' : '下旋'
-    case 'table': return c.card_detail === 'left' ? '左半台' : '右半台'
+    case 'spin': return c.card_detail === 'topspin' ? '上旋' : c.card_detail === 'backspin' ? '下旋' : '旋转'
+    case 'table': return c.card_detail === 'left' ? '左半台' : c.card_detail === 'right' ? '右半台' : '半台'
     case 'defense': return '防守'
     default: return '?'
   }
@@ -114,8 +127,8 @@ function cardLabel(c: CardDef): string {
 function cardDesc(c: CardDef): string {
   switch (c.card_type) {
     case 'handicap': return `对手开局领先${c.card_value}分`
-    case 'spin': return c.card_detail === 'topspin' ? '只允许发上旋球' : '只允许发下旋球'
-    case 'table': return c.card_detail === 'left' ? '只允许发球到左半台' : '只允许发球到右半台'
+    case 'spin': return c.card_detail ? (c.card_detail === 'topspin' ? '只允许发上旋球' : '只允许发下旋球') : '由低分方指定发球旋转'
+    case 'table': return c.card_detail ? (c.card_detail === 'left' ? '只允许发球到左半台' : '只允许发球到右半台') : '由低分方指定发球半台'
     case 'defense': return '只允许防守不允许进攻'
     default: return ''
   }
@@ -158,7 +171,7 @@ function startDraw() {
     const [speed, duration] = phases[phaseIdx]
     if (spinTimer.value) clearInterval(spinTimer.value)
     spinTimer.value = setInterval(() => {
-      highlightIdx.value = (highlightIdx.value + 1) % ALL_CARDS.length
+      highlightIdx.value = (highlightIdx.value + 1) % activeCards.value.length
     }, speed)
 
     phaseIdx++
@@ -218,19 +231,19 @@ onBeforeUnmount(() => {
       <div v-if="!started" class="center-start">
         <button @click="startDraw" class="start-btn">🎰<br/>抽卡</button>
       </div>
-      <div v-else-if="resultIdx >= 0" class="center-result" :style="{ borderColor: ALL_CARDS[resultIdx].color }">
-        <div class="result-icon" :style="{ color: ALL_CARDS[resultIdx].color }">{{ cardIcon(ALL_CARDS[resultIdx]) }}</div>
+      <div v-else-if="resultIdx >= 0" class="center-result" :style="{ borderColor: activeCards[resultIdx].color }">
+        <div class="result-icon" :style="{ color: activeCards[resultIdx].color }">{{ cardIcon(activeCards[resultIdx]) }}</div>
         <div style="font-size: 20px; font-weight: 800; color: #fff;">⭐ 抽中!</div>
-        <div style="font-size: 16px; font-weight: 700; color: #ccc;">{{ cardLabel(ALL_CARDS[resultIdx]) }}</div>
-        <div style="font-size: 12px; color: #999; margin-top: 4px;">{{ cardDesc(ALL_CARDS[resultIdx]) }}</div>
+        <div style="font-size: 16px; font-weight: 700; color: #ccc;">{{ cardLabel(activeCards[resultIdx]) }}</div>
+        <div style="font-size: 12px; color: #999; margin-top: 4px;">{{ cardDesc(activeCards[resultIdx]) }}</div>
       </div>
-      <div v-else class="center-spinning" :style="{ borderColor: ALL_CARDS[highlightIdx].color }">
-        <div class="result-icon" :style="{ color: ALL_CARDS[highlightIdx].color }">{{ cardIcon(ALL_CARDS[highlightIdx]) }}</div>
-        <div style="font-size: 14px; font-weight: 700; color: '#fff';">{{ cardLabel(ALL_CARDS[highlightIdx]) }}</div>
+      <div v-else class="center-spinning" :style="{ borderColor: activeCards[highlightIdx].color }">
+        <div class="result-icon" :style="{ color: activeCards[highlightIdx].color }">{{ cardIcon(activeCards[highlightIdx]) }}</div>
+        <div style="font-size: 14px; font-weight: 700; color: '#fff';">{{ cardLabel(activeCards[highlightIdx]) }}</div>
       </div>
 
       <!-- Ring of cards -->
-      <div v-for="(c, i) in ALL_CARDS" :key="c.id"
+      <div v-for="(c, i) in activeCards" :key="c.id"
         class="ring-card"
         :style="{
           borderColor: c.color,
@@ -249,19 +262,19 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Marquee trail dots -->
-      <div v-for="(_, i) in ALL_CARDS" :key="'dot'+i"
+      <div v-for="(_, i) in activeCards" :key="'dot'+i"
         class="ring-dot"
         :style="{
           transform: `translate(${cardPositions[i].x}px, ${cardPositions[i].y}px)`,
-          background: ALL_CARDS[i].color,
+          background: activeCards[i].color,
           opacity: (() => {
             if (!spinning || highlightIdx < 0) return 0
-            const dist = (i - highlightIdx + ALL_CARDS.length) % ALL_CARDS.length
+            const dist = (i - highlightIdx + activeCards.length) % activeCards.length
             if (dist === 0) return 0
-            return Math.max(0, 1 - dist / ALL_CARDS.length)
+            return Math.max(0, 1 - dist / activeCards.length)
           })(),
-          width: (4 + 2 * (1 - ((i - highlightIdx + ALL_CARDS.length) % ALL_CARDS.length) / ALL_CARDS.length))+'px',
-          height: (4 + 2 * (1 - ((i - highlightIdx + ALL_CARDS.length) % ALL_CARDS.length) / ALL_CARDS.length))+'px',
+          width: (4 + 2 * (1 - ((i - highlightIdx + activeCards.length) % activeCards.length) / activeCards.length))+'px',
+          height: (4 + 2 * (1 - ((i - highlightIdx + activeCards.length) % activeCards.length) / activeCards.length))+'px',
         }">
       </div>
     </div>

@@ -200,8 +200,8 @@ function playerLosses(pid: number): number {
 function drawLabel(d: any): string {
   switch (d.card_type) {
     case 'handicap': return `让${d.card_value}分`
-    case 'spin': return d.card_detail === 'topspin' ? '上旋' : '下旋'
-    case 'table': return d.card_detail === 'left' ? '左半台' : '右半台'
+    case 'spin': return d.card_detail === 'topspin' ? '上旋' : d.card_detail === 'backspin' ? '下旋' : '旋转'
+    case 'table': return d.card_detail === 'left' ? '左半台' : d.card_detail === 'right' ? '右半台' : '半台'
     case 'defense': return '防守'
     default: return '?'
   }
