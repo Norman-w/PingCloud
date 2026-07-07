@@ -7,6 +7,7 @@ type Player struct {
 	Name            string    `json:"name"`
 	Gender          string    `json:"gender"`
 	Phone           string    `json:"phone"`
+	Grip            string    `json:"grip"`
 	InitialRating   int       `json:"initial_rating"`
 	CurrentRating   int       `json:"current_rating"`
 	ReferenceRating int       `json:"reference_rating"`
@@ -17,6 +18,7 @@ type CreatePlayerRequest struct {
 	Name            string `json:"name"`
 	Gender          string `json:"gender"`
 	Phone           string `json:"phone"`
+	Grip            string `json:"grip"`
 	InitialRating   int    `json:"initial_rating"`
 	ReferenceRating int    `json:"reference_rating"`
 }

@@ -16,6 +16,7 @@ import (
 type FunSessionSummary struct {
 	ID             int    `json:"id"`
 	Name           string `json:"name"`
+	Mode           string `json:"mode"`
 	MaleCount      int    `json:"male_count"`
 	FemaleCount    int    `json:"female_count"`
 	Status         string `json:"status"`
@@ -70,6 +71,7 @@ type FunMatchInfo struct {
 type FunSessionDetail struct {
 	ID             int                `json:"id"`
 	Name           string             `json:"name"`
+	Mode           string             `json:"mode"`
 	MaleCount      int                `json:"male_count"`
 	FemaleCount    int                `json:"female_count"`
 	Status         string             `json:"status"`
@@ -106,7 +108,7 @@ var cardTypes = []struct {
 
 func GetFunSessions(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`
-		SELECT fs.id, fs.name, fs.male_count, fs.female_count, fs.status,
+		SELECT fs.id, fs.name, COALESCE(fs.mode,'gender'), fs.male_count, fs.female_count, fs.status,
 			fs.male_wins, fs.female_wins,
 			COALESCE(fs.male_game_wins,0), COALESCE(fs.female_game_wins,0),
 			COALESCE(fs.male_points,0), COALESCE(fs.female_points,0),
@@ -128,7 +130,7 @@ func GetFunSessions(w http.ResponseWriter, r *http.Request) {
 	var result []FunSessionSummary
 	for rows.Next() {
 		var s FunSessionSummary
-		if err := rows.Scan(&s.ID, &s.Name, &s.MaleCount, &s.FemaleCount, &s.Status,
+		if err := rows.Scan(&s.ID, &s.Name, &s.Mode, &s.MaleCount, &s.FemaleCount, &s.Status,
 			&s.MaleWins, &s.FemaleWins, &s.MaleGameWins, &s.FemaleGameWins, &s.MalePoints, &s.FemalePoints,
 			&s.CreatedAt, &s.MatchCount, &s.UnplayedCount); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -145,6 +147,7 @@ func GetFunSessions(w http.ResponseWriter, r *http.Request) {
 func CreateFunSession(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name            string `json:"name"`
+		Mode            string `json:"mode"`
 		MalePlayerIDs   []int  `json:"male_player_ids"`
 		FemalePlayerIDs []int  `json:"female_player_ids"`
 	}
@@ -165,8 +168,8 @@ func CreateFunSession(w http.ResponseWriter, r *http.Request) {
 
 	var sessionID int
 	err = tx.QueryRow(
-		`INSERT INTO fun_sessions (name, male_count, female_count) VALUES ($1, $2, $3) RETURNING id`,
-		req.Name, len(req.MalePlayerIDs), len(req.FemalePlayerIDs),
+		`INSERT INTO fun_sessions (name, mode, male_count, female_count) VALUES ($1, $2, $3, $4) RETURNING id`,
+		req.Name, req.Mode, len(req.MalePlayerIDs), len(req.FemalePlayerIDs),
 	).Scan(&sessionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -249,10 +252,10 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 	detail := FunSessionDetail{}
 
 	err := db.DB.QueryRow(
-		`SELECT id, name, male_count, female_count, status, COALESCE(winning_team,''), male_wins, female_wins,
+		`SELECT id, name, COALESCE(mode,'gender'), male_count, female_count, status, COALESCE(winning_team,''), male_wins, female_wins,
 			COALESCE(male_game_wins,0), COALESCE(female_game_wins,0), COALESCE(male_points,0), COALESCE(female_points,0), created_at
 		FROM fun_sessions WHERE id=$1 AND deleted=false`, sessionID,
-	).Scan(&detail.ID, &detail.Name, &detail.MaleCount, &detail.FemaleCount,
+	).Scan(&detail.ID, &detail.Name, &detail.Mode, &detail.MaleCount, &detail.FemaleCount,
 		&detail.Status, &detail.WinningTeam, &detail.MaleWins, &detail.FemaleWins,
 		&detail.MaleGameWins, &detail.FemaleGameWins, &detail.MalePoints, &detail.FemalePoints, &detail.CreatedAt)
 	if err != nil {

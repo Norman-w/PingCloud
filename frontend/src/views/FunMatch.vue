@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { IconTournament, IconPlus, IconList, IconUsers, IconTrophy, IconChevronRight } from '@tabler/icons-vue'
 import FunMatchPlay, { type FunMatchItem } from '../components/FunMatchPlay.vue'
@@ -30,9 +30,17 @@ const players = ref<Player[]>([])
 const loadingPlayers = ref(true)
 
 const step = ref<'list' | 'select' | 'confirm' | 'play' | 'result'>('list')
+const matchMode = ref('gender')
 const maleIDs = ref<Set<number>>(new Set())
 const femaleIDs = ref<Set<number>>(new Set())
 const sessionName = ref('')
+
+const isPimpleRR = computed(() => matchMode.value === 'pimple_rr')
+const teamLabels = computed(() => {
+  if (matchMode.value === 'rubber') return { a:'双反队', b:'颗粒队', ta:'反胶', tb:'颗粒' }
+  if (matchMode.value === 'pimple_rr') return { a:'颗粒组', b:'', ta:'颗粒', tb:'' }
+  return { a:'男队', b:'女队', ta:'男', tb:'女' }
+})
 
 const currentSession = ref<FunSessionDetail | null>(null)
 const sessions = ref<FunSessionSummary[]>([])
@@ -73,9 +81,8 @@ function toggleFemale(id: number) {
 }
 
 function goConfirm() {
-  if (maleIDs.value.size === 0 || femaleIDs.value.size === 0) {
-    showToast('男女队至少各选1人'); return
-  }
+  if (maleIDs.value.size === 0) { showToast('请至少选择1人'); return }
+  if (!isPimpleRR.value && femaleIDs.value.size === 0) { showToast('请至少选择1人'); return }
   if (!sessionName.value.trim()) {
     const mNames = Array.from(maleIDs.value).map(id => players.value.find(p => p.id === id)?.name).filter(Boolean)
     const fNames = Array.from(femaleIDs.value).map(id => players.value.find(p => p.id === id)?.name).filter(Boolean)
@@ -90,6 +97,7 @@ async function createSession() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: sessionName.value.trim(),
+        mode: matchMode.value,
         male_player_ids: Array.from(maleIDs.value),
         female_player_ids: Array.from(femaleIDs.value),
       }),
@@ -227,7 +235,7 @@ function playerById(id: number): FunPlayer | undefined {
           趣味赛
         </div>
         <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">
-          {{ step === 'list' ? '男女对抗趣味团体赛' : step === 'select' ? '选男队和女队' : step === 'confirm' ? '确认对阵信息' : step === 'play' ? '逐场录入比分' : '比赛结果' }}
+          {{ step === 'list' ? '趣味团体赛' : step === 'select' ? `选${teamLabels.a}和${teamLabels.b}` : step === 'confirm' ? '确认对阵信息' : step === 'play' ? '逐场录入比分' : '比赛结果' }}
         </div>
       </div>
 
@@ -274,10 +282,21 @@ function playerById(id: number): FunPlayer | undefined {
 
       <!-- ===== SELECT ===== -->
       <template v-if="step === 'select'">
+        <!-- Mode selector -->
+        <div style="padding:8px 16px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button v-for="m in [{v:'gender',l:'男女对抗'},{v:'rubber',l:'胶皮大战'},{v:'pimple_rr',l:'全颗粒大循环'}]" :key="m.v"
+              @click="matchMode=m.v; if(m.v==='rubber'){}"
+              style="flex:1;padding:10px 8px;border-radius:10px;border:2px solid;font-size:13px;font-weight:600;cursor:pointer;text-align:center;min-width:0;"
+              :style="matchMode===m.v?{background:'#1989fa',color:'#fff',borderColor:'#1989fa'}:{background:'#fff',color:'#666',borderColor:'#ddd'}">
+              {{ m.l }}</button>
+          </div>
+        </div>
+
         <!-- Male team -->
         <div style="font-size: 16px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 6px;">
           <IconUsers :size="18" :stroke-width="2" style="vertical-align: -3px; color: #1989fa;" />
-          男队（已选 {{ maleIDs.size }} 人）
+          {{ teamLabels.a }}（已选 {{ maleIDs.size }} 人）
         </div>
         <div style="background: #fff; border-radius: 12px; margin: 4px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden;">
           <div v-for="p in players" :key="'m'+p.id" @click="toggleMale(p.id)"
@@ -291,10 +310,11 @@ function playerById(id: number): FunPlayer | undefined {
           </div>
         </div>
 
-        <!-- Female team -->
+        <!-- Female / Team B (hidden for single-group mode) -->
+        <template v-if="!isPimpleRR">
         <div style="font-size: 16px; font-weight: 600; padding: 16px 16px 8px; display: flex; align-items: center; gap: 6px; margin-top: 8px;">
           <IconUsers :size="18" :stroke-width="2" style="vertical-align: -3px; color: #ee0a24;" />
-          女队（已选 {{ femaleIDs.size }} 人）
+          {{ teamLabels.b }}（已选 {{ femaleIDs.size }} 人）
         </div>
         <div style="background: #fff; border-radius: 12px; margin: 4px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden;">
           <div v-for="p in players" :key="'f'+p.id" @click="toggleFemale(p.id)"
@@ -314,12 +334,13 @@ function playerById(id: number): FunPlayer | undefined {
           <button :disabled="maleIDs.size === 0 || femaleIDs.size === 0" @click="goConfirm"
             style="width: 100%; padding: 16px; background: linear-gradient(135deg, #ff6b9d, #c44569); color: #fff; border: none; border-radius: 24px; font-size: 17px; font-weight: 600; cursor: pointer;"
             :style="{ opacity: (maleIDs.size === 0 || femaleIDs.size === 0) ? 0.5 : 1 }">
-            下一步（男{{ maleIDs.size }}人 女{{ femaleIDs.size }}人）
+            下一步（{{ isPimpleRR ? `已选${maleIDs.size}人` : `${teamLabels.ta}${maleIDs.size}人 ${teamLabels.tb}${femaleIDs.size}人` }}）
           </button>
           <div style="text-align: center; margin-top: 12px;">
             <button @click="step = 'list'" style="background: none; border: none; color: #969799; font-size: 14px; cursor: pointer;">返回列表</button>
           </div>
         </div>
+        </template>
       </template>
 
       <!-- ===== CONFIRM ===== -->
@@ -331,15 +352,15 @@ function playerById(id: number): FunPlayer | undefined {
         <div style="background: #fff; border-radius: 12px; padding: 16px; margin: 8px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);">
           <div style="font-weight: 600; margin-bottom: 12px; font-size: 16px;">{{ sessionName }}</div>
           <div style="margin-bottom: 8px;">
-            <span style="font-size: 14px; color: #1989fa; font-weight: 600;">男队 ({{ maleIDs.size }}人): </span>
+            <span style="font-size: 14px; color: #1989fa; font-weight: 600;">{{ teamLabels.a }} ({{ maleIDs.size }}人): </span>
             <span v-for="p in selectedMalePlayers()" :key="p.id" style="font-size: 14px; padding: 4px 8px; background: #e8f4ff; color: #1989fa; border-radius: 6px; margin: 2px; display: inline-block;">{{ p.name }} ({{ p.current_rating }})</span>
           </div>
           <div style="margin-bottom: 8px;">
-            <span style="font-size: 14px; color: #ee0a24; font-weight: 600;">女队 ({{ femaleIDs.size }}人): </span>
+            <span style="font-size: 14px; color: #ee0a24; font-weight: 600;">{{ teamLabels.b }} ({{ femaleIDs.size }}人): </span>
             <span v-for="p in selectedFemalePlayers()" :key="p.id" style="font-size: 14px; padding: 4px 8px; background: #fde8ef; color: #ee0a24; border-radius: 6px; margin: 2px; display: inline-block;">{{ p.name }} ({{ p.current_rating }})</span>
           </div>
           <div style="margin-top: 12px; font-size: 13px; color: #969799;">
-            每位男队员 VS 每位女队员，共 {{ maleIDs.size * femaleIDs.size }} 场比赛<br/>
+            每位{{ teamLabels.ta }}队员 VS 每位{{ teamLabels.tb }}队员，共 {{ maleIDs.size * femaleIDs.size }} 场比赛<br/>
             分差≥50分触发趣味抽卡机制
           </div>
         </div>

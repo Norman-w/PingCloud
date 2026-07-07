@@ -5,6 +5,7 @@ export interface Player {
   name: string
   gender: string
   phone: string
+  grip: string
   initial_rating: number
   current_rating: number
   reference_rating: number
