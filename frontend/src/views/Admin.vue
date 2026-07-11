@@ -28,6 +28,7 @@ const playerSearch = ref('')
 const showRating = ref(false)
 const ratingPlayerId = ref(0)
 const ratingNew = ref('')
+const ratingRefNew = ref('')
 const ratingReason = ref('')
 const ratingPlayerName = ref('')
 
@@ -97,16 +98,18 @@ async function deleteUser(u: AdminUser) {
 }
 async function adjustRating() {
   if (!ratingPlayerId.value || !ratingNew.value) return
+  const body: any = { player_id: ratingPlayerId.value, new_rating: parseInt(ratingNew.value), reason: ratingReason.value }
+  if (ratingRefNew.value !== '') body.new_reference_rating = parseInt(ratingRefNew.value)
   await fetch('/api/admin/rating', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ player_id: ratingPlayerId.value, new_rating: parseInt(ratingNew.value), reason: ratingReason.value }),
+    body: JSON.stringify(body),
     credentials: 'include',
   })
   showRating.value = false; ratingReason.value = ''
   try { players.value = await api.getPlayers() } catch {}
 }
 function openRating(p: Player) {
-  ratingPlayerId.value = p.id; ratingPlayerName.value = p.name; ratingNew.value = String(p.current_rating); ratingReason.value = ''
+  ratingPlayerId.value = p.id; ratingPlayerName.value = p.name; ratingNew.value = String(p.current_rating); ratingRefNew.value = p.reference_rating ? String(p.reference_rating) : ''; ratingReason.value = ''
   showRating.value = true
 }
 async function logout() {
@@ -334,8 +337,12 @@ async function logout() {
       <div style="background:#fff;border-radius:16px;padding:24px;width:320px;">
         <h3 style="margin-bottom:8px;">修改积分 - {{ ratingPlayerName }}</h3>
         <div style="margin-bottom:10px;">
-          <div style="font-size:13px;color:#969799;margin-bottom:4px;">新积分</div>
+          <div style="font-size:13px;color:#969799;margin-bottom:4px;">系统积分 (current_rating)</div>
           <input v-model="ratingNew" type="number" placeholder="输入新积分" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700;outline:none;box-sizing:border-box;" />
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:13px;color:#969799;margin-bottom:4px;">开球网参考积分 (reference_rating)</div>
+          <input v-model="ratingRefNew" type="number" placeholder="留空则不修改" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:700;outline:none;box-sizing:border-box;" />
         </div>
         <div style="margin-bottom:16px;">
           <div style="font-size:13px;color:#969799;margin-bottom:4px;">修改原因（必填）</div>

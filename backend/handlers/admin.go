@@ -372,21 +372,37 @@ func AdminAdjustRating(w http.ResponseWriter, r *http.Request) {
 	if admin == nil { http.Error(w, "forbidden: only super_admin can edit ratings", http.StatusForbidden); return }
 
 	var req struct {
-		PlayerID int    `json:"player_id"`
-		NewRating int   `json:"new_rating"`
-		Reason   string `json:"reason"`
+		PlayerID          int    `json:"player_id"`
+		NewRating         int    `json:"new_rating"`
+		NewReferenceRating *int  `json:"new_reference_rating"`
+		Reason            string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest); return
 	}
 
-	var oldRating int
-	db.DB.QueryRow(`SELECT current_rating FROM players WHERE id=$1`, req.PlayerID).Scan(&oldRating)
-	db.DB.Exec(`UPDATE players SET current_rating=$1, initial_rating=CASE WHEN initial_rating=0 THEN $1 ELSE initial_rating END WHERE id=$2`, req.NewRating, req.PlayerID)
+	var oldRating, oldRefRating int
+	db.DB.QueryRow(`SELECT current_rating, COALESCE(reference_rating,0) FROM players WHERE id=$1`, req.PlayerID).Scan(&oldRating, &oldRefRating)
 
-	writeLog(admin.ID, "修改球员积分", "player", req.PlayerID,
-		`{"old":`+strconv.Itoa(oldRating)+`,"new":`+strconv.Itoa(req.NewRating)+`,"reason":"`+req.Reason+`"}`, r.RemoteAddr)
-	writeJSON(w, map[string]interface{}{"status":"ok","old_rating":oldRating,"new_rating":req.NewRating})
+	if req.NewReferenceRating != nil {
+		db.DB.Exec(`UPDATE players SET current_rating=$1, reference_rating=$2, initial_rating=CASE WHEN initial_rating=0 THEN $1 ELSE initial_rating END WHERE id=$3`, req.NewRating, *req.NewReferenceRating, req.PlayerID)
+	} else {
+		db.DB.Exec(`UPDATE players SET current_rating=$1, initial_rating=CASE WHEN initial_rating=0 THEN $1 ELSE initial_rating END WHERE id=$2`, req.NewRating, req.PlayerID)
+	}
+
+	detail := `{"old":`+strconv.Itoa(oldRating)+`,"new":`+strconv.Itoa(req.NewRating)
+	if req.NewReferenceRating != nil {
+		detail += `,"old_ref":`+strconv.Itoa(oldRefRating)+`,"new_ref":`+strconv.Itoa(*req.NewReferenceRating)
+	}
+	detail += `,"reason":"`+req.Reason+`"}`
+	writeLog(admin.ID, "修改球员积分", "player", req.PlayerID, detail, r.RemoteAddr)
+
+	resp := map[string]interface{}{"status":"ok","old_rating":oldRating,"new_rating":req.NewRating}
+	if req.NewReferenceRating != nil {
+		resp["old_reference_rating"] = oldRefRating
+		resp["new_reference_rating"] = *req.NewReferenceRating
+	}
+	writeJSON(w, resp)
 }
 
 // Update CreateUser to use group_id
