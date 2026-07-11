@@ -39,6 +39,11 @@ type FunSessionPlayer struct {
 	Team            string `json:"team"`
 	Wins            int    `json:"wins"`
 	Losses          int    `json:"losses"`
+	Points          int    `json:"points"`
+	GameWins        int    `json:"game_wins"`
+	GameLosses      int    `json:"game_losses"`
+	PointsFor       int    `json:"points_for"`
+	PointsAgainst   int    `json:"points_against"`
 }
 
 type FunDrawRecord struct {
@@ -290,19 +295,60 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prows, err := db.DB.Query(
-		`SELECT p.id, p.name, p.current_rating, COALESCE(p.reference_rating,0), fsp.team,
-			COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false THEN 1 ELSE 0 END), 0) AS wins,
-			COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS losses
-		FROM fun_session_players fsp JOIN players p ON p.id = fsp.player_id
-		LEFT JOIN fun_matches fm ON (fm.male_player_id = p.id OR fm.female_player_id = p.id) AND fm.session_id = $1
-		WHERE fsp.session_id = $1
-		GROUP BY p.id, p.name, p.current_rating, p.reference_rating, fsp.team
-		ORDER BY wins DESC, p.reference_rating DESC, p.name`, sessionID)
+		`SELECT * FROM (
+			SELECT p.id, p.name, p.current_rating, COALESCE(p.reference_rating,0) AS reference_rating, fsp.team,
+				COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false THEN 1 ELSE 0 END), 0) AS wins,
+				COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS losses,
+				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN
+					CASE WHEN fm.winner_id = p.id THEN 2 ELSE 1 END
+				ELSE 0 END), 0) AS points,
+				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false THEN
+					CASE WHEN fm.male_player_id = p.id THEN
+						(CASE WHEN COALESCE(fm.game1_score_male,0) > COALESCE(fm.game1_score_female,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game2_score_male,0) > COALESCE(fm.game2_score_female,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game3_score_male,0) > COALESCE(fm.game3_score_female,0) AND fm.game3_score_male IS NOT NULL THEN 1 ELSE 0 END)
+					ELSE
+						(CASE WHEN COALESCE(fm.game1_score_female,0) > COALESCE(fm.game1_score_male,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game2_score_female,0) > COALESCE(fm.game2_score_male,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game3_score_female,0) > COALESCE(fm.game3_score_male,0) AND fm.game3_score_female IS NOT NULL THEN 1 ELSE 0 END)
+					END
+				ELSE 0 END), 0) AS game_wins,
+				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false THEN
+					CASE WHEN fm.male_player_id = p.id THEN
+						(CASE WHEN COALESCE(fm.game1_score_male,0) < COALESCE(fm.game1_score_female,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game2_score_male,0) < COALESCE(fm.game2_score_female,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game3_score_male,0) < COALESCE(fm.game3_score_female,0) AND fm.game3_score_male IS NOT NULL THEN 1 ELSE 0 END)
+					ELSE
+						(CASE WHEN COALESCE(fm.game1_score_female,0) < COALESCE(fm.game1_score_male,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game2_score_female,0) < COALESCE(fm.game2_score_male,0) THEN 1 ELSE 0 END) +
+						(CASE WHEN COALESCE(fm.game3_score_female,0) < COALESCE(fm.game3_score_male,0) AND fm.game3_score_female IS NOT NULL THEN 1 ELSE 0 END)
+					END
+				ELSE 0 END), 0) AS game_losses,
+				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false THEN
+					CASE WHEN fm.male_player_id = p.id THEN
+						COALESCE(fm.game1_score_male, 0) + COALESCE(fm.game2_score_male, 0) + COALESCE(fm.game3_score_male, 0)
+					ELSE
+						COALESCE(fm.game1_score_female, 0) + COALESCE(fm.game2_score_female, 0) + COALESCE(fm.game3_score_female, 0)
+					END
+				ELSE 0 END), 0) AS points_for,
+				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false THEN
+					CASE WHEN fm.male_player_id = p.id THEN
+						COALESCE(fm.game1_score_female, 0) + COALESCE(fm.game2_score_female, 0) + COALESCE(fm.game3_score_female, 0)
+					ELSE
+						COALESCE(fm.game1_score_male, 0) + COALESCE(fm.game2_score_male, 0) + COALESCE(fm.game3_score_male, 0)
+					END
+				ELSE 0 END), 0) AS points_against
+			FROM fun_session_players fsp JOIN players p ON p.id = fsp.player_id
+			LEFT JOIN fun_matches fm ON (fm.male_player_id = p.id OR fm.female_player_id = p.id) AND fm.session_id = $1
+			WHERE fsp.session_id = $1
+			GROUP BY p.id, p.name, p.current_rating, p.reference_rating, fsp.team
+		) sub
+		ORDER BY points DESC, (game_wins - game_losses) DESC, (points_for - points_against) DESC, reference_rating DESC, name`, sessionID)
 	if err == nil {
 		defer prows.Close()
 		for prows.Next() {
 			var p FunSessionPlayer
-			prows.Scan(&p.ID, &p.Name, &p.CurrentRating, &p.ReferenceRating, &p.Team, &p.Wins, &p.Losses)
+			prows.Scan(&p.ID, &p.Name, &p.CurrentRating, &p.ReferenceRating, &p.Team, &p.Wins, &p.Losses, &p.Points, &p.GameWins, &p.GameLosses, &p.PointsFor, &p.PointsAgainst)
 			detail.Players = append(detail.Players, p)
 		}
 	}

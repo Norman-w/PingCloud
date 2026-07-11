@@ -449,7 +449,16 @@ function playerById(id: number): FunPlayer | undefined {
                   <div style="font-size:16px;font-weight:500;" :style="{fontWeight: i===0 ? 700 : 500}">{{ p.name }}
                     <span v-if="i === 0" style="font-size:12px;color:#f5a623;margin-left:4px;">🏆</span>
                   </div>
-                  <div style="font-size:12px;color:#969799;">{{ p.wins }}胜 {{ p.losses }}负</div>
+                  <div style="font-size:12px;color:#969799;">
+                    {{ p.wins }}胜 {{ p.losses }}负
+                    <span style="color:#1989fa;font-weight:500;">· {{ p.points }}积分</span>
+                    <template v-if="p.game_wins + p.game_losses > 0">
+                      · 局{{ p.game_wins }}胜{{ p.game_losses }}负
+                    </template>
+                    <template v-if="(p.points_for || 0) + (p.points_against || 0) > 0">
+                      · 小分+{{ p.points_for }}/-{{ p.points_against }}
+                    </template>
+                  </div>
                 </div>
                 <div style="font-size:14px;font-weight:600;color:#1989fa;">{{ p.reference_rating || p.current_rating }} 分</div>
               </div>
@@ -490,8 +499,13 @@ function playerById(id: number): FunPlayer | undefined {
                 style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid #f5f5f5;">
                 <span style="font-size:14px;font-weight:500;">{{ p.name }}</span>
                 <span style="font-size:12px;color:#969799;margin-left:8px;">开球网 {{ p.reference_rating || p.current_rating }}</span>
-                <span style="font-size:13px;margin-left:auto;"
-                  :style="{color: p.wins >= p.losses ? '#07c160' : '#ee0a24'}">{{ p.wins }}胜 {{ p.losses }}负</span>
+                <span style="font-size:12px;margin-left:auto;text-align:right;"
+                  :style="{color: p.wins >= p.losses ? '#07c160' : '#ee0a24'}">
+                  {{ p.wins }}胜 {{ p.losses }}负 · {{ p.points }}积分
+                  <span v-if="p.game_wins + p.game_losses > 0" style="display:block;font-size:10px;color:#969799;">
+                    局{{ p.game_wins }}胜{{ p.game_losses }}负 · 小分+{{ p.points_for }}/-{{ p.points_against }}
+                  </span>
+                </span>
               </div>
             </div>
           </div>

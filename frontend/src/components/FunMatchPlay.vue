@@ -45,7 +45,7 @@ const props = defineProps<{
   malePoints: number
   femalePoints: number
   matches: FunMatchItem[]
-  sessionPlayers: { id: number; name: string; current_rating: number; reference_rating: number }[]
+  sessionPlayers: { id: number; name: string; current_rating: number; reference_rating: number; team?: string; wins?: number; losses?: number; points?: number; game_wins?: number; game_losses?: number; points_for?: number; points_against?: number }[]
   showEditDialog: boolean
   scoringMatch: FunMatchItem | null
   drawingCard: boolean
@@ -67,19 +67,20 @@ const isWheel = computed(() => props.mode === 'wheel_rr')
 
 const individualStandings = computed(() => {
   if (!isWheel.value) return []
-  const stats = new Map<number, { id: number; name: string; rating: number; wins: number; losses: number }>()
-  for (const p of props.sessionPlayers) {
-    stats.set(p.id, { id: p.id, name: p.name, rating: p.reference_rating > 0 ? p.reference_rating : p.current_rating, wins: 0, losses: 0 })
-  }
-  for (const m of props.matches) {
-    if (!m.played) continue
-    const a = stats.get(m.male_player_id)
-    const b = stats.get(m.female_player_id)
-    if (a) { if (m.winner_id === m.male_player_id) a.wins++; else a.losses++ }
-    if (b) { if (m.winner_id === m.female_player_id) b.wins++; else b.losses++ }
-  }
-  return Array.from(stats.values()).filter(s => s.wins + s.losses > 0 || stats.size <= props.sessionPlayers.length)
-    .sort((a, b) => b.wins - a.wins || b.rating - a.rating)
+  // Use backend-computed stats (wins, losses, points, game_wins, game_losses, points_for, points_against)
+  // Backend already sorts by points DESC, game_wins-game_losses DESC, rating DESC
+  return props.sessionPlayers.map(p => ({
+    id: p.id,
+    name: p.name,
+    rating: p.reference_rating > 0 ? p.reference_rating : p.current_rating,
+    wins: p.wins || 0,
+    losses: p.losses || 0,
+    points: p.points || 0,
+    gameWins: p.game_wins || 0,
+    gameLosses: p.game_losses || 0,
+    pointsFor: p.points_for || 0,
+    pointsAgainst: p.points_against || 0,
+  }))
 })
 
 function playerRating(pid: number): number {

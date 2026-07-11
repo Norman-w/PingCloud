@@ -10,6 +10,11 @@ export interface StandingPlayer {
   ratingLabel?: string
   ratingChange?: number
   forfeits?: number
+  points?: number
+  gameWins?: number
+  gameLosses?: number
+  pointsFor?: number
+  pointsAgainst?: number
 }
 
 defineProps<{
@@ -33,6 +38,9 @@ defineProps<{
         <div style="font-size:15px;font-weight:500;">{{ p.name }} <span style="font-size:11px;color:#c8c9cc;">#{{ i + 1 }}</span></div>
         <div style="font-size:12px;color:#969799;">
           {{ p.wins }}胜 {{ p.losses }}负
+          <template v-if="p.points !== undefined"><span style="color:#1989fa;font-weight:500;">· {{ p.points }}分</span></template>
+          <template v-if="p.gameWins !== undefined">· 局{{ p.gameWins }}胜{{ p.gameLosses }}负</template>
+          <template v-if="p.pointsFor !== undefined">· 小分+{{ p.pointsFor }}/-{{ p.pointsAgainst }}</template>
           <template v-if="p.forfeits">· 弃权{{ p.forfeits }}</template>
         </div>
       </div>
