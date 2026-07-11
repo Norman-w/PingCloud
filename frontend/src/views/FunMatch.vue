@@ -16,7 +16,8 @@ interface FunSessionSummary {
 
 interface FunPlayer {
   id: number; name: string; current_rating: number; reference_rating: number; team: string
-  wins: number; losses: number
+  wins: number; losses: number; points: number
+  game_wins: number; game_losses: number; points_for: number; points_against: number
 }
 
 interface FunSessionDetail {
@@ -39,6 +40,35 @@ const sessionName = ref('')
 
 const isSingleGroup = computed(() => matchMode.value === 'pimple_rr' || matchMode.value === 'wheel_rr')
 const isWheelRR = computed(() => matchMode.value === 'wheel_rr')
+
+// Tie detection for wheel_rr rankings
+function isScoreTied(a: FunPlayer, b: FunPlayer): boolean {
+  if ((a.points || 0) !== (b.points || 0)) return false
+  if ((a.game_wins || 0) - (a.game_losses || 0) !== (b.game_wins || 0) - (b.game_losses || 0)) return false
+  return (a.points_for || 0) - (a.points_against || 0) === (b.points_for || 0) - (b.points_against || 0)
+}
+
+const rankedPlayers = computed(() => {
+  if (!currentSession.value) return []
+  const players = currentSession.value.players
+  if (players.length === 0) return []
+  const result: (FunPlayer & { rank: number })[] = []
+  let rank = 1
+  for (let i = 0; i < players.length; i++) {
+    if (i > 0 && !isScoreTied(players[i], players[i - 1])) {
+      rank = i + 1
+    }
+    result.push({ ...players[i], rank })
+  }
+  return result
+})
+
+function medalStyle(rank: number) {
+  if (rank === 1) return { background: '#fff3cd', color: '#b8860b' }
+  if (rank === 2) return { background: '#e8e8e8', color: '#666' }
+  if (rank === 3) return { background: '#ffe8d6', color: '#b87333' }
+  return { background: '#f0f2f5', color: '#969799' }
+}
 const teamLabels = computed(() => {
   if (matchMode.value === 'rubber') return { a:'双反队', b:'颗粒队', ta:'反胶', tb:'颗粒' }
   if (matchMode.value === 'pimple_rr') return { a:'颗粒组', b:'', ta:'颗粒', tb:'' }
@@ -440,14 +470,15 @@ function playerById(id: number): FunPlayer | undefined {
               <div style="font-size:13px;color:#969799;">最终排名</div>
             </div>
             <div style="margin-top:8px;">
-              <div v-for="(p, i) in currentSession.players" :key="p.id"
+              <div v-for="(p, i) in rankedPlayers" :key="p.id"
                 style="display:flex;align-items:center;padding:10px 0;"
-                :style="{opacity: i === 0 ? 1 : 0.8}">
+                :style="{opacity: p.rank === 1 ? 1 : 0.8}">
                 <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;"
-                  :style="{background:i===0?'#fff3cd':i===1?'#e8e8e8':i===2?'#ffe8d6':'#f0f2f5',color:i===0?'#b8860b':i===1?'#666':i===2?'#b87333':'#969799'}">{{ i + 1 }}</div>
+                  :style="medalStyle(p.rank)">{{ p.rank }}</div>
                 <div style="flex:1;margin-left:12px;">
-                  <div style="font-size:16px;font-weight:500;" :style="{fontWeight: i===0 ? 700 : 500}">{{ p.name }}
-                    <span v-if="i === 0" style="font-size:12px;color:#f5a623;margin-left:4px;">🏆</span>
+                  <div style="font-size:16px;font-weight:500;" :style="{fontWeight: p.rank===1 ? 700 : 500}">{{ p.name }}
+                    <span v-if="i > 0 && isScoreTied(p, rankedPlayers[i-1])" style="font-size:11px;color:#f5a623;margin-left:2px;">并列</span>
+                    <span v-if="p.rank === 1" style="font-size:12px;color:#f5a623;margin-left:4px;">🏆</span>
                   </div>
                   <div style="font-size:12px;color:#969799;">
                     {{ p.wins }}胜 {{ p.losses }}负
