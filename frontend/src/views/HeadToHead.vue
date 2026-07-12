@@ -146,10 +146,18 @@ async function init() {
   camera.position.set(0, 2, camDist)
   camera.lookAt(0, 0, 0)
 
-  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' })
   renderer.setSize(W, H)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1))
   container.value.appendChild(renderer.domElement)
+
+  // Handle WebGL context loss
+  renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault()
+    cancelAnimationFrame(animId)
+    error.value = '3D渲染失败，请刷新页面重试'
+    loading.value = false
+  })
 
   raycaster = new THREE.Raycaster()
 
