@@ -30,7 +30,32 @@ var (
 		attempts int
 	}{}
 	codeStoreMu sync.Mutex
+
+	// IP rate limiter: track SMS sends per IP
+	ipRateMap   = map[string][]time.Time{}
+	ipRateMapMu sync.Mutex
 )
+
+// IP rate limit: max 5 SMS per hour per IP
+func checkIPRate(ip string) bool {
+	ipRateMapMu.Lock()
+	defer ipRateMapMu.Unlock()
+	now := time.Now()
+	// Clean old entries
+	var recent []time.Time
+	for _, t := range ipRateMap[ip] {
+		if now.Sub(t) < time.Hour {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= 5 {
+		ipRateMap[ip] = recent
+		return false // rate limited
+	}
+	recent = append(recent, now)
+	ipRateMap[ip] = recent
+	return true
+}
 
 func genCode() string {
 	n, _ := rand.Int(rand.Reader, big.NewInt(9000))
@@ -119,6 +144,16 @@ func AuthSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// IP rate limit: max 5 per hour
+	clientIP := r.Header.Get("X-Real-IP")
+	if clientIP == "" { clientIP = r.Header.Get("X-Forwarded-For") }
+	if clientIP == "" { clientIP = r.RemoteAddr }
+	if idx := strings.LastIndex(clientIP, ":"); idx > 0 && !strings.Contains(clientIP, "[") { clientIP = clientIP[:idx] }
+	if !checkIPRate(clientIP) {
+		http.Error(w, "操作太频繁，请稍后再试", http.StatusTooManyRequests)
+		return
+	}
+
 	// Find player by phone
 	var pid int
 	var pname string
@@ -130,12 +165,12 @@ func AuthSendCode(w http.ResponseWriter, r *http.Request) {
 
 	// Rate limit: max 3 attempts in 5 min, 1 per 60s
 	codeStoreMu.Lock()
-	if s, ok := codeStore[phone]; ok && s.attempts >= 3 && time.Now().Before(s.expires.Add(4*time.Minute)) {
+	if s, ok := codeStore[phone]; ok && s.attempts >= 3 && time.Since(s.expires) < 5*time.Minute {
 		codeStoreMu.Unlock()
-		http.Error(w, "验证码发送次数过多，请稍后再试", http.StatusTooManyRequests)
+		http.Error(w, "发送次数过多，请5分钟后再试", http.StatusTooManyRequests)
 		return
 	}
-	if s, ok := codeStore[phone]; ok && time.Now().Sub(s.expires) > -240*time.Second {
+	if s, ok := codeStore[phone]; ok && time.Since(s.expires) < 60*time.Second {
 		codeStoreMu.Unlock()
 		http.Error(w, "验证码已发送，请60秒后重试", http.StatusTooManyRequests)
 		return

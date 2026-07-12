@@ -99,6 +99,28 @@ var skillAttrMap = map[int]skillAttrs{
 	37: {BodyNone, Neutral, "none", "mixed","none"}, // 速度力量
 	38: {BodyNone, Neutral, "none", "mixed","none"}, // 落点角度
 	39: {BodyNone, Neutral, "none", "mixed","none"}, // 借力发力
+	// ── 初学技巧 (40-55) ──
+	40: {BodyNone, Neutral, "mixed","mixed","none"}, // 颠球
+	41: {BodyNone, Neutral, "mixed","mixed","none"}, // 抛球
+	42: {BodyNone, Neutral, "mixed","mixed","none"}, // 停球
+	43: {BodyNone, Neutral, "mixed","mixed","none"}, // 吊球
+	44: {BodyNone, Neutral, "none", "mixed","none"}, // 躺姿开肩放松
+	45: {BodyNone, Neutral, "none", "mixed","none"}, // 躺姿负重手小臂
+	46: {FH, Neutral, "mixed", "mixed","none"},      // 正手拉球引手辅助
+	47: {FH, Neutral, "mixed", "mixed","none"},      // 正手拉球等位辅助
+	48: {BH, Neutral, "mixed", "mixed","none"},      // 反手拨球定肘技巧
+	49: {Both, Neutral, "mixed","mixed","none"},     // 跟球技巧
+	50: {Both, Neutral, "mixed","mixed","none"},     // 击球位置技巧
+	51: {Both, Neutral, "mixed","mixed","none"},     // 发球跟球技巧
+	52: {Both, Neutral, "mixed","mixed","none"},     // 发球弧线技巧
+	53: {Both, Neutral, "mixed","mixed","none"},     // 跪姿跟弧线技巧
+	54: {FH, Neutral, "mixed", "mixed","none"},      // 正手拉下旋防漏技巧
+	55: {FH, Neutral, "mixed", "mixed","none"},      // 自动学翻挑技巧
+	// ── 身体协调和灵敏训练 (56-59) ──
+	56: {FH, Neutral, "mixed", "mixed","none"},      // 单脚正手拉球
+	57: {BodyNone, Neutral, "none","mixed","none"},  // 并步摸台
+	58: {BodyNone, Neutral, "none","mixed","none"},  // 接下落球
+	59: {FH, Neutral, "mixed", "mixed","none"},      // 三脚架引手和回收
 }
 
 // GetSkillMastery returns all skills with mastery status, tags, and training stats
@@ -243,7 +265,7 @@ func buildTagGroups(items []models.SkillMasteryItem) []models.SkillMasteryGroup 
 
 func buildStageGroups(items []models.SkillMasteryItem) []models.SkillMasteryGroup {
 	// Group by category (training stage)
-	stageOrder := []string{"基础入门", "基本功", "技战术", "物理学原理"}
+	stageOrder := []string{"基础入门", "初学技巧", "身体协调和灵敏训练", "基本功", "技战术", "物理学原理"}
 	stageMap := make(map[string][]models.SkillMasteryItem)
 	for _, item := range items {
 		stageMap[item.Category] = append(stageMap[item.Category], item)
