@@ -800,13 +800,13 @@ func ForfeitFunMatch(w http.ResponseWriter, r *http.Request) {
 
 	// Verify match belongs to session
 	var actualSessionID int
-	var wasPlayed string
-	tx.QueryRow(`SELECT session_id, winner_team FROM fun_matches WHERE id=$1 FOR UPDATE`, matchID).Scan(&actualSessionID, &wasPlayed)
+	var played bool
+	tx.QueryRow(`SELECT session_id, played FROM fun_matches WHERE id=$1 FOR UPDATE`, matchID).Scan(&actualSessionID, &played)
 	if actualSessionID != sessionID {
 		http.Error(w, "match not found", http.StatusNotFound)
 		return
 	}
-	if wasPlayed != "" {
+	if played {
 		http.Error(w, "match already played", http.StatusBadRequest)
 		return
 	}
@@ -816,7 +816,7 @@ func ForfeitFunMatch(w http.ResponseWriter, r *http.Request) {
 		winnerTeam = "A"
 	}
 
-	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_team=$1, forfeit=true WHERE id=$2`, winnerTeam, matchID)
+	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_team=$1, played=true WHERE id=$2`, winnerTeam, matchID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

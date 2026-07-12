@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showLoadingToast, showSuccessToast } from 'vant'
 import { IconTournament, IconPlus, IconList, IconUsers, IconTrophy, IconChevronRight } from '@tabler/icons-vue'
 import FunMatchPlay, { type FunMatchItem } from '../components/FunMatchPlay.vue'
 import FunMatchHonors from '../components/FunMatchHonors.vue'
@@ -153,11 +153,15 @@ function openScoreEditor(match: FunMatchItem) {
 
 async function handleForfeit(winnerIsMale: boolean) {
   if (!scoringMatch.value || !currentSession.value) return
-  await fetch(`/api/fun-sessions/${currentSession.value.id}/matches/${scoringMatch.value.id}/forfeit`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({forfeit:true, winner_is_male:winnerIsMale}),
-  })
-  await refreshSession(); showEditDialog.value = false
+  const toast = showLoadingToast({ message: '提交中...', forbidClick: true, duration: 0 })
+  try {
+    await fetch(`/api/fun-sessions/${currentSession.value.id}/matches/${scoringMatch.value.id}/forfeit`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({forfeit:true, winner_is_male:winnerIsMale}),
+    })
+    toast.close(); showSuccessToast('弃权已记录')
+    await refreshSession(); showEditDialog.value = false
+  } catch (e: any) { toast.close(); showToast('操作失败') }
 }
 
 async function handleScoreSubmit(g1m: number, g1f: number, g2m: number, g2f: number, g3m?: number, g3f?: number) {

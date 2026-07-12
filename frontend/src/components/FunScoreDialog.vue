@@ -123,8 +123,8 @@ watch(() => props.show, (v) => {
         <button @click="onSubmit" style="flex: 2; padding: 14px; background: #1989fa; color: #fff; border: none; border-radius: 24px; font-size: 15px; font-weight: 600; cursor: pointer;">确认提交</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button @click="onCancel(); emit('forfeit', true)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ femaleName }} 弃权</button>
-        <button @click="onCancel(); emit('forfeit', false)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ maleName }} 弃权</button>
+        <button @click="emit('forfeit', true)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ femaleName }} 弃权</button>
+        <button @click="emit('forfeit', false)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ maleName }} 弃权</button>
       </div>
     </div>
   </div>
