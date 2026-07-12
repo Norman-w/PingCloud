@@ -5,6 +5,8 @@ import { showToast, showSuccessToast } from 'vant'
 import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconClock, IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
 import { myId, myName, checkAuth, logout as authLogout } from '../auth'
 import LoginModal from '../components/LoginModal.vue'
+import LocationPicker from '../components/LocationPicker.vue'
+import PlayerPicker from '../components/PlayerPicker.vue'
 
 const route = useRoute(); const router = useRouter()
 const skillId = Number(route.params.id)
@@ -62,20 +64,13 @@ function stopTraining() { training.value = false; if (trainTimer) { clearInterva
 const showConfirm = ref(false)
 const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
 const saving = ref(false)
-// Location & player search
-const locSearch = ref(''); const locResults = ref<{id:number;name:string}[]>([]); const showLocDrop = ref(false)
-const playerSearch = ref(''); const playerResults = ref<{id:number;name:string}[]>([]); const showPlayerDrop = ref(false)
-async function searchLocs(q: string) { if(!q){locResults.value=[];return}; try{const r=await fetch('/api/locations?q='+encodeURIComponent(q));if(r.ok)locResults.value=await r.json()}catch{} }
-function pickLoc(name: string) { confirmLoc.value = name; showLocDrop.value = false; locSearch.value = '' }
-async function createLoc() { if(!locSearch.value.trim())return; try{const r=await fetch('/api/locations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:locSearch.value.trim()})});if(r.ok){const l=await r.json();confirmLoc.value=l.name;showLocDrop.value=false;locSearch.value=''}}catch{} }
-async function searchPlayers(q: string) { if(!q){playerResults.value=[];return}; try{const r=await fetch('/api/players?q='+encodeURIComponent(q));if(r.ok)playerResults.value=await r.json()}catch{} }
-function pickPlayer(name: string) { confirmPartner.value = name; showPlayerDrop.value = false; playerSearch.value = '' }
+// Picker visibility
+const showLocPicker = ref(false); const showPlayerPicker = ref(false)
+
 function openConfirm() {
   confirmDate.value = new Date().toISOString().slice(0,10)
-  confirmDuration.value = String(Math.ceil(trainElapsed.value / 60) || 60)
+  confirmDuration.value = String(trainElapsed.value || 60)
   confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
-  locSearch.value = ''; locResults.value = []; showLocDrop.value = false
-  playerSearch.value = ''; playerResults.value = []; showPlayerDrop.value = false
   showConfirm.value = true
 }
 async function saveRecord() {
@@ -143,7 +138,7 @@ function defaults(id: number): Record<string,number> {
   const o:Record<string,number>={}; names.forEach(n=>o[n]=1); return o
 }
 
-function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; return m>0?`${m}分${sec}秒`:`${sec}秒` }
+function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor((s%3600)/60); const sec=s%60; if(h>0)return`${h}时${m}分${sec}秒`; if(m>0)return`${m}分${sec}秒`; return`${sec}秒` }
 </script>
 
 <template>
@@ -218,7 +213,7 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
           <div @click="toggleExpand(h.id)" style="padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
             <div>
               <div style="font-weight:600;font-size:14px;">{{ h.date }}</div>
-              <div style="font-size:12px;color:#999;margin-top:2px;">{{ h.duration_minutes }}分钟<template v-if="h.partner"> · {{ h.partner }}</template><template v-if="h.location"> · {{ h.location }}</template></div>
+              <div style="font-size:12px;color:#999;margin-top:2px;">{{ formatTime(h.duration_minutes) }}<template v-if="h.partner"> · {{ h.partner }}</template><template v-if="h.location"> · {{ h.location }}</template></div>
             </div>
             <IconChevronDown :size="18" style="color:#ccc;" :style="{transform:expandedHistory.has(h.id)?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}" />
           </div>
@@ -253,21 +248,14 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
           <!-- Editable fields -->
           <div style="display:flex;gap:12px;margin-bottom:14px;">
             <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">日期</div><input v-model="confirmDate" type="date" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
-            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">时长(分钟)</div><input v-model="confirmDuration" type="number" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">时长(秒)</div><input v-model="confirmDuration" type="number" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
           </div>
           <div style="display:flex;gap:12px;margin-bottom:14px;">
-            <div style="flex:1;position:relative;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">地点</div>
-              <input v-model="confirmLoc" placeholder="搜索或输入" @focus="showLocDrop=true" @input="searchLocs(($event.target as any).value)" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;" />
-              <div v-if="showLocDrop" style="position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e8e8e8;border-radius:10px;max-height:150px;overflow-y:auto;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.08);margin-top:2px;">
-                <div v-for="l in locResults" :key="l.id" @click="pickLoc(l.name)" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f5f5f5;">{{ l.name }}</div>
-                <div v-if="confirmLoc && locResults.length===0" @click="createLoc()" style="padding:10px 14px;cursor:pointer;color:#1989fa;font-size:14px;">+ 创建「{{ confirmLoc }}」</div>
-              </div>
+            <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">地点</div>
+              <button @click="showLocPicker=true" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;text-align:left;background:#fff;cursor:pointer;outline:none;box-sizing:border-box;" :style="{color:confirmLoc?'#333':'#999'}">{{ confirmLoc || '点击选择场馆' }}</button>
             </div>
-            <div style="flex:1;position:relative;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">陪练</div>
-              <input v-model="confirmPartner" placeholder="搜索球员" @focus="showPlayerDrop=true" @input="searchPlayers(($event.target as any).value)" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;" />
-              <div v-if="showPlayerDrop && playerResults.length>0" style="position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e8e8e8;border-radius:10px;max-height:150px;overflow-y:auto;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.08);margin-top:2px;">
-                <div v-for="p in playerResults" :key="p.id" @click="pickPlayer(p.name)" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f5f5f5;">{{ p.name }}</div>
-              </div>
+            <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">陪练</div>
+              <button @click="showPlayerPicker=true" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;text-align:left;background:#fff;cursor:pointer;outline:none;box-sizing:border-box;" :style="{color:confirmPartner?'#333':'#999'}">{{ confirmPartner || '点击选择球员' }}</button>
             </div>
           </div>
           <div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">练习量</div><input v-model="confirmAmount" placeholder="例: 5组、200球" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
@@ -277,5 +265,7 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
     </div>
 
     <LoginModal v-model:visible="showLogin" />
+  <LocationPicker v-model="confirmLoc" v-model:visible="showLocPicker" />
+  <PlayerPicker v-model="confirmPartner" v-model:visible="showPlayerPicker" />
   </div>
 </template>

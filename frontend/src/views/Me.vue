@@ -19,7 +19,7 @@ interface SkillGroup { label: string; skills: SkillItem[] }
 const stages = ref<SkillGroup[]>([]); const tagFilters = ref<SkillGroup[]>([])
 const activeTags = ref<string[]>([]); const collapsedStages = ref<Set<string>>(new Set())
 
-const totalHours = computed(() => { const h = Math.floor(stats.value.total_minutes/60); const m = stats.value.total_minutes%60; return h>0?`${h}h${m}m`:`${m}m` })
+const totalHours = computed(() => { const h=Math.floor(stats.value.total_minutes/3600); const m=Math.floor((stats.value.total_minutes%3600)/60); if(h>0)return`${h}h${m}m`; return`${m}m` })
 function allMastered(stage: SkillGroup) { return stage.skills.length>0 && stage.skills.every(s => s.status==='mastered') }
 function stageMasteredCount(stage: SkillGroup) { return stage.skills.filter(s => s.status==='mastered').length }
 function isCollapsed(stage: SkillGroup) { return collapsedStages.value.has(stage.label) }
@@ -139,7 +139,7 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
               <span v-for="t in item.tags.slice(0,3)" :key="t" style="display:flex;align-items:center;gap:2px;padding:1px 5px;border-radius:4px;color:#fff;font-size:10px;font-weight:500;" :style="{background:tagColor(t)}"><span v-html="tagIcons[t]" style="display:flex;align-items:center;"></span>{{ t }}</span>
             </div>
             <div style="font-size:10px;color:#999;">
-              <template v-if="item.practice_count>0">{{ item.practice_count }}次 · {{ Math.floor(item.total_duration_minutes/60) }}h{{ item.total_duration_minutes%60 }}m</template>
+              <template v-if="item.practice_count>0">{{ item.practice_count }}次 · {{ Math.floor(item.total_duration_minutes/3600) }}h{{ Math.floor((item.total_duration_minutes%3600)/60) }}m</template>
             </div>
             <div v-if="item.practice_count>0" style="margin-top:6px;height:2px;background:#e0e0e0;border-radius:1px;overflow:hidden;"><div style="height:100%;border-radius:1px;" :style="{width:Math.min(100,item.practice_count*20)+'%',background:statusStyle(item.status).border}"></div></div>
           </div>
