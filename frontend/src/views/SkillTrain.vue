@@ -63,23 +63,41 @@ function stopTraining() { training.value = false; if (trainTimer) { clearInterva
 // ── confirm/save ──
 const showConfirm = ref(false)
 const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
+const confirmIndicators = ref<Record<string,number>>({})
 const saving = ref(false)
-// Picker visibility
 const showLocPicker = ref(false); const showPlayerPicker = ref(false)
+// Editable radar
+const confirmKeys = computed(() => Object.keys(confirmIndicators.value))
+const editW = 260; const editH = 280; const editCX = 130; const editCY = 125; const editR = 90
+const svgRef = ref<SVGSVGElement>(); const activeAxis = ref(-1); const dragging = ref(false)
+function editPt(i:number,v:number){const n=confirmKeys.value.length;if(!n)return{x:editCX,y:editCY};const a=(2*Math.PI*i)/n-Math.PI/2;return{x:editCX+(editR*v/5)*Math.cos(a),y:editCY+(editR*v/5)*Math.sin(a)}}
+function editEnd(i:number){const n=confirmKeys.value.length;if(!n)return{x:editCX,y:editCY};const a=(2*Math.PI*i)/n-Math.PI/2;return{x:editCX+editR*Math.cos(a),y:editCY+editR*Math.sin(a)}}
+function editLbl(i:number){const e=editEnd(i);const dx=e.x-editCX;const dy=e.y-editCY;const d=Math.hypot(dx,dy);const nx=dx/d;const ny=dy/d;return{x:editCX+nx*(editR+20),y:editCY+ny*(editR+16),anchor:Math.abs(nx)>0.7?(nx>0?'start':'end'):'middle'}}
+function editGrid(lv:number){return confirmKeys.value.map((_,i)=>{const p=editPt(i,lv);return`${p.x},${p.y}`}).join(' ')}
+function editPoly(){return confirmKeys.value.map((_,i)=>{const p=editPt(i,confirmIndicators.value[confirmKeys.value[i]]||1);return`${p.x},${p.y}`}).join(' ')}
+function getPos(e:PointerEvent){const s=svgRef.value!;const r=s.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*editW,y:(e.clientY-r.top)/r.height*editH}}
+function onDown(e:PointerEvent){const p=getPos(e);let best=-1;let minD=Infinity;for(let i=0;i<confirmKeys.value.length;i++){const ep=editEnd(i);const d=Math.hypot(p.x-ep.x,p.y-ep.y);if(d<minD){minD=d;best=i}};if(minD<45){activeAxis.value=best;dragging.value=true;svgRef.value?.setPointerCapture(e.pointerId)}}
+function onMove(e:PointerEvent){if(!dragging.value||activeAxis.value<0)return;const p=getPos(e);const i=activeAxis.value;const n=confirmKeys.value.length;const a=(2*Math.PI*i)/n-Math.PI/2;const proj=(p.x-editCX)*Math.cos(a)+(p.y-editCY)*Math.sin(a);const v=Math.round(Math.max(1,Math.min(5,proj/editR*5)));confirmIndicators.value={...confirmIndicators.value,[confirmKeys.value[i]]:v}}
+function onUp(){dragging.value=false;activeAxis.value=-1}
 
 function openConfirm() {
   confirmDate.value = new Date().toISOString().slice(0,10)
   confirmDuration.value = String(trainElapsed.value || 60)
   confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
+  confirmIndicators.value = hasData.value ? {...(history.value[0].indicators||defaults(skillId))} : defaults(skillId)
   showConfirm.value = true
 }
+
 async function saveRecord() {
   saving.value = true
   try {
-    const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: parseInt(confirmDuration.value)||60, location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value, practice_amount: confirmAmount.value, skill_notes: confirmSkillNotes.value, energy_rating: 0, feel_rating: 0, indicators: currentIndicators.value }
+    const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: parseInt(confirmDuration.value)||60,
+      location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value,
+      practice_amount: confirmAmount.value, skill_notes: '', energy_rating: 0, feel_rating: 0,
+      indicators: confirmIndicators.value }
     const r = await fetch('/api/skill-train', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     if (!r.ok) { showToast(await r.text() || '保存失败'); return }
-    showSuccessToast('已保存'); showConfirm.value = false; await loadData()
+    showSuccessToast('已保存'); showConfirm.value = false; router.back()
   } catch (e: any) { showToast('保存失败') }
   finally { saving.value = false }
 }
@@ -241,9 +259,22 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
         </div>
         <div style="padding:16px;">
           <!-- Summary -->
-          <div style="text-align:center;padding:20px;background:#f8f9fa;border-radius:12px;margin-bottom:16px;">
+          <div style="text-align:center;padding:20px;background:#f8f9fa;border-radius:12px;margin-bottom:8px;">
             <div style="font-size:32px;font-weight:800;color:#07c160;">{{ formatTime(trainElapsed) }}</div>
             <div style="font-size:14px;color:#666;margin-top:4px;">本次训练时长</div>
+          </div>
+
+          <!-- Editable radar chart -->
+          <div style="margin-bottom:16px;display:flex;flex-direction:column;align-items:center;">
+            <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">📊 拖拽调整指标</div>
+            <svg ref="svgRef" :viewBox="`0 0 ${editW} ${editH}`" width="260" height="280" style="max-width:100%;touch-action:none;cursor:pointer;" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onUp">
+              <polygon v-for="lv in [1,2,3,4,5]" :key="lv" :points="editGrid(lv)" fill="none" :stroke="lv===5?'#d0d0d0':'#e8e8e8'" stroke-width="1" :stroke-dasharray="lv===5?'0':'4,3'" />
+              <line v-for="(_,i) in confirmKeys" :key="'ax'+i" :x1="editCX" :y1="editCY" :x2="editEnd(i).x" :y2="editEnd(i).y" stroke="#e0e0e0" stroke-width="1" />
+              <polygon :points="editPoly()" fill="rgba(7,193,96,0.15)" stroke="#07c160" stroke-width="2" />
+              <circle v-for="(name,i) in confirmKeys" :key="'pt'+i" :cx="editPt(i,confirmIndicators[name]).x" :cy="editPt(i,confirmIndicators[name]).y" :r="activeAxis===i?10:6" fill="#fff" stroke="#07c160" stroke-width="2.5" style="cursor:grab;" />
+              <text v-for="(name,i) in confirmKeys" :key="'v'+i" :x="editPt(i,confirmIndicators[name]).x" :y="editPt(i,confirmIndicators[name]).y-10" text-anchor="middle" font-size="10" font-weight="700" fill="#07c160">{{ confirmIndicators[name] }}</text>
+              <text v-for="(name,i) in confirmKeys" :key="'l'+i" :x="editLbl(i).x" :y="editLbl(i).y" :text-anchor="editLbl(i).anchor" font-size="11" font-weight="600" fill="#333">{{ name }}</text>
+            </svg>
           </div>
           <!-- Editable fields -->
           <div style="display:flex;gap:12px;margin-bottom:14px;">
