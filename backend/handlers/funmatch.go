@@ -39,6 +39,8 @@ type FunSessionPlayer struct {
 	Team            string `json:"team"`
 	Wins            int    `json:"wins"`
 	Losses          int    `json:"losses"`
+	ForfeitWins     int    `json:"forfeit_wins"`
+	Forfeits        int    `json:"forfeits"`
 	Points          int    `json:"points"`
 	GameWins        int    `json:"game_wins"`
 	GameLosses      int    `json:"game_losses"`
@@ -300,6 +302,8 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 			SELECT p.id, p.name, p.current_rating, COALESCE(p.reference_rating,0) AS reference_rating, fsp.team,
 				COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false AND fm.forfeit = false THEN 1 ELSE 0 END), 0) AS wins,
 				COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND fm.forfeit = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS losses,
+				COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false AND fm.forfeit = true THEN 1 ELSE 0 END), 0) AS forfeit_wins,
+				COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND fm.forfeit = true AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS forfeits,
 				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN
 					CASE WHEN fm.winner_id = p.id THEN 2 ELSE 1 END
 				ELSE 0 END), 0) AS points,
@@ -349,7 +353,7 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 		defer prows.Close()
 		for prows.Next() {
 			var p FunSessionPlayer
-			prows.Scan(&p.ID, &p.Name, &p.CurrentRating, &p.ReferenceRating, &p.Team, &p.Wins, &p.Losses, &p.Points, &p.GameWins, &p.GameLosses, &p.PointsFor, &p.PointsAgainst)
+			prows.Scan(&p.ID, &p.Name, &p.CurrentRating, &p.ReferenceRating, &p.Team, &p.Wins, &p.Losses, &p.ForfeitWins, &p.Forfeits, &p.Points, &p.GameWins, &p.GameLosses, &p.PointsFor, &p.PointsAgainst)
 			detail.Players = append(detail.Players, p)
 		}
 	}

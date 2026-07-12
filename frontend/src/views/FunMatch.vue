@@ -16,7 +16,7 @@ interface FunSessionSummary {
 
 interface FunPlayer {
   id: number; name: string; current_rating: number; reference_rating: number; team: string
-  wins: number; losses: number; points: number
+  wins: number; losses: number; forfeit_wins: number; forfeits: number; points: number
   game_wins: number; game_losses: number; points_for: number; points_against: number
 }
 
@@ -496,6 +496,7 @@ function playerById(id: number): FunPlayer | undefined {
                   </div>
                   <div style="font-size:12px;color:#969799;">
                     {{ p.wins }}胜 {{ p.losses }}负
+                    <template v-if="(p.forfeit_wins||0)+(p.forfeits||0)>0"> · 弃权{{ p.forfeit_wins||0 }}</template>
                     <span style="color:#1989fa;font-weight:500;">· {{ p.points }}积分</span>
                     <template v-if="p.game_wins + p.game_losses > 0">
                       · 局{{ p.game_wins }}胜{{ p.game_losses }}负

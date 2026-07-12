@@ -65,6 +65,7 @@ const showConfirm = ref(false)
 const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
 const confirmIndicators = ref<Record<string,number>>({})
 const saving = ref(false)
+const hasData = computed(() => history.value.length > 0)
 const showLocPicker = ref(false); const showPlayerPicker = ref(false)
 // Editable radar
 const confirmKeys = computed(() => Object.keys(confirmIndicators.value))
