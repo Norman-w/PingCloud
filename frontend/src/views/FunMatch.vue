@@ -151,6 +151,15 @@ function openScoreEditor(match: FunMatchItem) {
   scoringMatch.value = match; showEditDialog.value = true
 }
 
+async function handleForfeit(winnerIsMale: boolean) {
+  if (!scoringMatch.value || !currentSession.value) return
+  await fetch(`/api/fun-sessions/${currentSession.value.id}/matches/${scoringMatch.value.id}/forfeit`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({forfeit:true, winner_is_male:winnerIsMale}),
+  })
+  await refreshSession(); showEditDialog.value = false
+}
+
 async function handleScoreSubmit(g1m: number, g1f: number, g2m: number, g2f: number, g3m?: number, g3f?: number) {
   if (!scoringMatch.value || !currentSession.value) return
   try {
@@ -449,6 +458,7 @@ function playerById(id: number): FunPlayer | undefined {
           @update:show-edit-dialog="showEditDialog = $event"
           @open-score-editor="openScoreEditor"
           @submit-score="handleScoreSubmit"
+          @forfeit="handleForfeit"
           @refresh="refreshSession"
           @cancel-session="handleCancelSession"
           @complete-session="completeSession"

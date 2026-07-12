@@ -55,6 +55,7 @@ const emit = defineEmits<{
   (e: 'update:showEditDialog', v: boolean): void
   (e: 'openScoreEditor', m: FunMatchItem): void
   (e: 'submitScore', g1m: number, g1f: number, g2m: number, g2f: number, g3m?: number, g3f?: number): void
+  (e: 'forfeit', winnerIsMale: boolean): void
   (e: 'drawCard', matchId: number, playerId: number): void
   (e: 'completeSession'): void
   (e: 'backToList'): void
@@ -291,6 +292,7 @@ function drawColor(d: FunDrawRecord): string {
       :handicap-points="scoringMatch?.handicap_points || 0"
       @update:show="emit('update:showEditDialog', $event)"
       @submit="(g1m:number,g1f:number,g2m:number,g2f:number,g3m?:number,g3f?:number) => emit('submitScore', g1m, g1f, g2m, g2f, g3m, g3f)"
+      @forfeit="(winnerIsMale:boolean) => emit('forfeit', winnerIsMale)"
     />
 
     <!-- Redraw confirmation -->

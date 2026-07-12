@@ -228,6 +228,10 @@ func main() {
 				handlers.DrawFunCard(w, r)
 				return
 			}
+			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/forfeit") {
+				handlers.ForfeitFunMatch(w, r)
+				return
+			}
 			if strings.Contains(path, "/matches/") {
 				handlers.ScoreFunMatch(w, r)
 				return

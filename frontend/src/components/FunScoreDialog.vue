@@ -11,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:show', v: boolean): void
   (e: 'submit', g1m: number, g1f: number, g2m: number, g2f: number, g3m?: number, g3f?: number): void
+  (e: 'forfeit', winnerIsMale: boolean): void
 }>()
 
 const g1m = ref(''), g1f = ref('')
@@ -120,6 +121,10 @@ watch(() => props.show, (v) => {
       <div style="display: flex; gap: 12px; margin-top: 16px;">
         <button @click="onCancel" style="flex: 1; padding: 14px; background: #f5f5f5; border: none; border-radius: 24px; font-size: 15px; cursor: pointer;">取消</button>
         <button @click="onSubmit" style="flex: 2; padding: 14px; background: #1989fa; color: #fff; border: none; border-radius: 24px; font-size: 15px; font-weight: 600; cursor: pointer;">确认提交</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button @click="onCancel(); emit('forfeit', true)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ femaleName }} 弃权</button>
+        <button @click="onCancel(); emit('forfeit', false)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ maleName }} 弃权</button>
       </div>
     </div>
   </div>

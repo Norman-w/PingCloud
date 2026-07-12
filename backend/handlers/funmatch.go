@@ -769,3 +769,63 @@ func generateFunRoundRobin(playerIDs []int) []pair {
 
 	return result
 }
+
+// ForfeitFunMatch marks a fun session match as forfeited
+func ForfeitFunMatch(w http.ResponseWriter, r *http.Request) {
+	// Path: /api/fun-sessions/{sessionID}/matches/{matchID}/forfeit
+	path := strings.TrimPrefix(r.URL.Path, "/api/fun-sessions/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 || parts[1] != "matches" || parts[3] != "forfeit" {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	sessionID, _ := strconv.Atoi(parts[0])
+	matchID, _ := strconv.Atoi(parts[2])
+
+	var req struct {
+		Forfeit      bool `json:"forfeit"`
+		WinnerIsMale bool `json:"winner_is_male"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Verify match belongs to session
+	var actualSessionID int
+	var wasPlayed string
+	tx.QueryRow(`SELECT session_id, winner_team FROM fun_matches WHERE id=$1 FOR UPDATE`, matchID).Scan(&actualSessionID, &wasPlayed)
+	if actualSessionID != sessionID {
+		http.Error(w, "match not found", http.StatusNotFound)
+		return
+	}
+	if wasPlayed != "" {
+		http.Error(w, "match already played", http.StatusBadRequest)
+		return
+	}
+
+	winnerTeam := "B"
+	if req.WinnerIsMale {
+		winnerTeam = "A"
+	}
+
+	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_team=$1, forfeit=true WHERE id=$2`, winnerTeam, matchID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
+}
