@@ -84,7 +84,8 @@ function openConfirm() {
   confirmDate.value = new Date().toISOString().slice(0,10)
   confirmDuration.value = String(trainElapsed.value || 60)
   confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
-  confirmIndicators.value = hasData.value ? {...(history.value[0].indicators||defaults(skillId))} : defaults(skillId)
+  const src = (hasData.value && history.value[0]?.indicators && Object.keys(history.value[0].indicators).length>0) ? history.value[0].indicators : defaults(skillId)
+  confirmIndicators.value = JSON.parse(JSON.stringify(src))
   showConfirm.value = true
 }
 
