@@ -817,11 +817,17 @@ func ForfeitFunMatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	winnerTeam := "B"
+	var winnerID int
 	if req.WinnerIsMale {
 		winnerTeam = "A"
 	}
 
-	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_team=$1, played=true, forfeit=true WHERE id=$2`, winnerTeam, matchID)
+	// Get player IDs for winner
+	var maleID, femaleID int
+	tx.QueryRow(`SELECT male_player_id, female_player_id FROM fun_matches WHERE id=$1`, matchID).Scan(&maleID, &femaleID)
+	if req.WinnerIsMale { winnerID = maleID } else { winnerID = femaleID }
+
+	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_id=$1, winner_team=$2, played=true, forfeit=true WHERE id=$3`, winnerID, winnerTeam, matchID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
