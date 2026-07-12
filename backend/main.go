@@ -443,6 +443,94 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Skills library
+	mux.HandleFunc("/api/skills", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.GetSkills(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Training logs
+	mux.HandleFunc("/api/training-logs/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		path := strings.TrimPrefix(r.URL.Path, "/api/training-logs/")
+		switch r.Method {
+		case http.MethodGet:
+			if path == "" { handlers.GetTrainingLogs(w, r); return }
+			handlers.GetTrainingLog(w, r)
+		case http.MethodPost:
+			if path == "" { handlers.CreateTrainingLog(w, r); return }
+			http.Error(w, "not found", http.StatusNotFound)
+		case http.MethodPut:
+			if path != "" { handlers.UpdateTrainingLog(w, r); return }
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		case http.MethodDelete:
+			if path != "" { handlers.DeleteTrainingLog(w, r); return }
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/training-logs", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.GetTrainingLogs(w, r)
+		case http.MethodPost: handlers.CreateTrainingLog(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Training stats
+	mux.HandleFunc("/api/training-stats", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.GetTrainingStats(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Skill mastery
+	mux.HandleFunc("/api/skill-mastery/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPut { handlers.UpdateSkillMastery(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/skill-mastery", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.GetSkillMastery(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Locations
+	mux.HandleFunc("/api/locations", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.GetLocations(w, r)
+		case http.MethodPost: handlers.CreateLocation(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Skill training
+	mux.HandleFunc("/api/skill-train/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.GetSkillTrainHistory(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+	mux.HandleFunc("/api/skill-train", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodPost { handlers.CreateSkillTraining(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))

@@ -2,13 +2,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { IconPingPong, IconSwords, IconTrophy, IconScoreboard, IconSpeakerphone } from '@tabler/icons-vue'
+import { IconPingPong, IconSwords, IconTrophy, IconScoreboard, IconSpeakerphone, IconTournament, IconPlus, IconChevronRight } from '@tabler/icons-vue'
 import { api, type RankingEntry } from '../api'
 import { unreadCount } from '../bulletins'
 
 const router = useRouter()
 const rankings = ref<RankingEntry[]>([])
 const loading = ref(true)
+
+// Sessions on home page
+interface SessionSummary {
+  id: number; name: string; status: string; player_count: number; match_count: number; unplayed_count: number
+}
+const homeSessions = ref<SessionSummary[]>([])
+const loadingSessions = ref(false)
 
 const stats = computed(() => {
   const total = rankings.value.length
@@ -27,6 +34,12 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  // Load sessions
+  loadingSessions.value = true
+  try {
+    homeSessions.value = await fetch('/api/sessions').then(r => r.json()).catch(() => [])
+  } catch { /* ignore */ }
+  finally { loadingSessions.value = false }
 })
 
 function rankClass(index: number) {
@@ -130,6 +143,46 @@ function winRate(p: RankingEntry) {
           {{ p.current_rating }}
         </div>
       </div>
+    </div>
+
+    <!-- Recent Sessions -->
+    <div class="section-title" style="justify-content: space-between; margin-top: 8px;">
+      <span>
+        <IconTournament :size="18" :stroke-width="2" style="vertical-align: -3px; margin-right: 6px;" />
+        近期活动
+      </span>
+      <span @click="router.push({ name: 'SessionView', query: { new: '1' } })" style="font-size: 13px; color: #1989fa; font-weight: 600; cursor: pointer; background: #e8f4ff; padding: 4px 12px; border-radius: 12px;">
+        <IconPlus :size="14" :stroke-width="2" style="vertical-align:-2px;" /> 新建
+      </span>
+    </div>
+
+    <van-loading v-if="loadingSessions" style="padding: 20px; text-align: center;" />
+
+    <div v-else-if="homeSessions.length === 0" style="text-align:center;padding:24px 20px;color:var(--c-text-hint);font-size:14px;">
+      暂无活动，<span @click="router.push({ name: 'SessionView', query: { new: '1' } })" style="color:#1989fa;cursor:pointer;">创建第一个</span>
+    </div>
+
+    <div v-else v-for="s in homeSessions.slice(0, 5)" :key="s.id"
+      @click="router.push({ name: 'SessionView' })"
+      class="card" style="margin: 8px 16px; padding: 14px 16px; cursor: pointer;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ s.name }}</div>
+          <div style="font-size: 12px; color: var(--c-text-hint); margin-top: 3px;">{{ s.player_count }} 人 · {{ s.match_count }} 场</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span style="font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 10px;"
+            :style="s.status==='completed'?'background:#e8f8ef;color:#07c160;':'background:#e8f4ff;color:#1989fa;'">
+            {{ s.status === 'completed' ? '已结束' : '进行中' }}
+          </span>
+          <IconChevronRight :size="16" :stroke-width="2" style="color: #c8c9cc;" />
+        </div>
+      </div>
+    </div>
+
+    <div v-if="homeSessions.length > 5" @click="router.push({ name: 'SessionView' })"
+      style="text-align:center;padding:12px;color:#1989fa;font-size:14px;cursor:pointer;">
+      查看全部 {{ homeSessions.length }} 个活动 ▸
     </div>
 
     <div style="height: 8px;"></div>

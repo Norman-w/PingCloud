@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconHome, IconTournament, IconUserPlus, IconConfetti, IconLogin, IconSwords } from '@tabler/icons-vue'
+import { IconHome, IconUserPlus, IconConfetti, IconLogin, IconSwords, IconUser } from '@tabler/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -71,8 +71,8 @@ const tabs = [
   { name: 'Home', label: '排位', component: IconHome },
   { name: 'TeamBattle', label: '团体赛', component: IconSwords },
   { name: 'FunMatch', label: '趣味赛', component: IconConfetti },
-  { name: 'SessionView', label: '活动', component: IconTournament },
   { name: 'AddPlayer', label: '球员', component: IconUserPlus },
+  { name: 'Me', label: '我的', component: IconUser },
 ]
 
 const active = computed(() => {
@@ -92,12 +92,6 @@ function onTabChange(name: string) {
 
 <template>
   <div id="app-shell">
-    <!-- Login indicator -->
-    <div v-if="!hideTabbar" style="position:fixed;top:0;right:0;z-index:100;padding:6px 12px;">
-      <button v-if="myId>0" @click="logout" style="background:rgba(255,255,255,0.9);border:1px solid #e0e0e0;border-radius:12px;padding:3px 10px;font-size:11px;color:#1989fa;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.06);">🏓 {{ myName }}</button>
-      <button v-else @click="openLogin" style="background:rgba(255,255,255,0.9);border:1px dashed #ccc;border-radius:12px;padding:3px 10px;font-size:11px;color:#999;cursor:pointer;">
-        <IconLogin :size="14" style="vertical-align:-2px;" /> 登录</button>
-    </div>
 
     <div class="app-body">
       <router-view />
