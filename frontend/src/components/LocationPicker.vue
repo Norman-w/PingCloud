@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { IconSearch, IconPlus, IconMapPin } from '@tabler/icons-vue'
+import { IconSearch, IconPlus, IconMapPin, IconChevronRight } from '@tabler/icons-vue'
+import LocationDetail, { type LocData } from './LocationDetail.vue'
 
 const model = defineModel<string>('modelValue', { default: '' })
 const visible = defineModel<boolean>('visible', { default: false })
 
 const search = ref('')
-const list = ref<{ id: number; name: string }[]>([])
-const creating = ref(false)
+const list = ref<LocData[]>([])
+const showDetail = ref(false)
+const detailLoc = ref<LocData | null>(null)
 
 async function load(q?: string) {
   const url = q ? `/api/locations?q=${encodeURIComponent(q)}` : '/api/locations'
@@ -20,56 +22,78 @@ watch(visible, async (v) => {
 
 async function doSearch() { await load(search.value) }
 
-function select(name: string) { model.value = name; visible.value = false }
+function select(loc: LocData) { model.value = loc.name; visible.value = false }
 
-async function create() {
-  if (!search.value.trim()) return
-  creating.value = true
-  try {
-    const r = await fetch('/api/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: search.value.trim() }) })
-    if (r.ok) { const l = await r.json(); model.value = l.name; visible.value = false }
-  } catch {} finally { creating.value = false }
+function openCreate() {
+  detailLoc.value = null // null = create mode
+  showDetail.value = true
+}
+
+function openDetail(loc: LocData) {
+  detailLoc.value = loc
+  showDetail.value = true
+}
+
+function onSaved(loc: LocData) {
+  // Auto-select after create/edit
+  model.value = loc.name
+  visible.value = false
+}
+
+function onDeleted() {
+  // Refresh list after delete
+  load(search.value)
 }
 </script>
 
 <template>
-  <div v-if="visible" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3500;display:flex;align-items:flex-end;" @click.self="visible=false">
+  <!-- Selection sheet -->
+  <div v-if="visible && !showDetail" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3500;display:flex;align-items:flex-end;" @click.self="visible=false">
     <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:70vh;display:flex;flex-direction:column;">
-      <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:12px;">
+      <!-- Header -->
+      <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:12px;flex-shrink:0;">
         <IconMapPin :size="20" :stroke-width="2" style="color:#1989fa;flex-shrink:0;" />
         <span style="font-weight:700;font-size:17px;flex:1;">选择场馆</span>
-        <button @click="visible=false" style="background:none;border:none;font-size:20px;color:#999;cursor:pointer;padding:4px;">✕</button>
+        <button @click="visible=false" style="background:none;border:none;font-size:22px;color:#bbb;cursor:pointer;padding:4px;">✕</button>
       </div>
       <!-- Search -->
-      <div style="padding:12px 16px;display:flex;gap:8px;">
-        <div style="flex:1;position:relative;">
-          <IconSearch :size="16" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#ccc;" />
-          <input v-model="search" @input="doSearch" placeholder="搜索场馆" style="width:100%;padding:10px 10px 10px 32px;border:1px solid #e8e8e8;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;background:#f8f9fa;" />
+      <div style="padding:12px 16px;flex-shrink:0;">
+        <div style="position:relative;">
+          <IconSearch :size="16" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#ccc;" />
+          <input v-model="search" @input="doSearch" placeholder="搜索场馆" style="width:100%;padding:12px 12px 12px 36px;border:1px solid #e8e8e8;border-radius:12px;font-size:15px;outline:none;box-sizing:border-box;background:#f8f9fa;" />
         </div>
       </div>
       <!-- List -->
       <div style="flex:1;overflow-y:auto;padding:0 16px;">
-        <div v-if="list.length===0" style="text-align:center;padding:40px 0;color:#bbb;">
-          <div style="font-size:14px;margin-bottom:12px;">暂无匹配场馆</div>
-          <button v-if="search.trim()" @click="create" :disabled="creating" style="padding:10px 24px;background:#1989fa;color:#fff;border:none;border-radius:20px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;margin:0 auto;">
-            <IconPlus :size="16" /> {{ creating ? '创建中...' : `创建「${search.trim()}」` }}
+        <div v-if="list.length===0" style="text-align:center;padding:40px 0;color:#bbb;font-size:14px;">
+          {{ search.trim() ? '未找到匹配场馆' : '暂无场馆' }}
+        </div>
+        <div v-for="l in list" :key="l.id" style="display:flex;align-items:center;padding:14px 0;border-bottom:1px solid #f5f5f5;">
+          <div @click="select(l)" style="flex:1;cursor:pointer;display:flex;align-items:center;gap:12px;min-width:0;">
+            <div style="width:40px;height:40px;border-radius:10px;background:#e8f4ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <IconMapPin :size="18" :stroke-width="2" style="color:#1989fa;" />
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ l.name }}</div>
+              <div style="font-size:12px;color:#999;">{{ l.address || l.location_type || '' }}</div>
+            </div>
+            <div v-if="model===l.name" style="width:22px;height:22px;border-radius:50%;background:#07c160;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="color:#fff;font-size:12px;font-weight:700;">✓</span></div>
+          </div>
+          <button @click="openDetail(l)" style="background:none;border:none;padding:8px;cursor:pointer;flex-shrink:0;">
+            <IconChevronRight :size="18" style="color:#ccc;" />
           </button>
         </div>
-        <div v-for="l in list" :key="l.id" @click="select(l.name)" style="padding:14px 0;cursor:pointer;border-bottom:1px solid #f5f5f5;display:flex;align-items:center;justify-content:space-between;">
-          <div style="font-size:15px;font-weight:500;">{{ l.name }}</div>
-          <div style="width:22px;height:22px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;" :style="model===l.name?'background:#1989fa;border-color:#1989fa;':''">
-            <span v-if="model===l.name" style="color:#fff;font-size:12px;">✓</span>
-          </div>
-        </div>
       </div>
-      <!-- Create button at bottom -->
-      <div v-if="search.trim() && list.length>0" style="padding:12px 16px;border-top:1px solid #f0f0f0;">
-        <button @click="create" :disabled="creating" style="width:100%;padding:12px;background:none;border:2px dashed #1989fa;border-radius:12px;color:#1989fa;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
-          <IconPlus :size="18" /> 新增「{{ search.trim() }}」
+      <!-- Create button -->
+      <div style="padding:12px 16px;border-top:1px solid #f0f0f0;flex-shrink:0;">
+        <button @click="openCreate" style="width:100%;padding:14px;background:none;border:2px dashed #1989fa;border-radius:14px;color:#1989fa;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+          <IconPlus :size="20" :stroke-width="2.5" /> 新建场馆
         </button>
       </div>
-      <!-- Safe area -->
-      <div style="height:env(safe-area-inset-bottom);"></div>
+      <div style="height:env(safe-area-inset-bottom);flex-shrink:0;"></div>
     </div>
   </div>
+
+  <!-- Location detail (create/edit/view) -->
+  <LocationDetail v-model:visible="showDetail" :loc="detailLoc" @saved="onSaved" @deleted="onDeleted" />
 </template>

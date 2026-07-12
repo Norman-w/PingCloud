@@ -507,6 +507,16 @@ func main() {
 	})
 
 	// Locations
+	mux.HandleFunc("/api/locations/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.GetLocation(w, r)
+		case http.MethodPut: handlers.UpdateLocation(w, r)
+		case http.MethodDelete: handlers.DeleteLocation(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/api/locations", func(w http.ResponseWriter, r *http.Request) {
 		cors(w)
 		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
