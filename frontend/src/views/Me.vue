@@ -21,6 +21,22 @@ async function doLogin() {
   try { const r = await fetch('/api/auth/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value, code:loginCode.value}) }); if (!r.ok) { loginMsg.value = '验证码错误'; return }; const d = await r.json(); myId.value = d.player_id; myName.value = d.player_name; showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; await loadAll() } catch { loginMsg.value = '验证失败' }
 }
 async function logout() { myId.value = 0; myName.value = ''; document.cookie = 'ping_id=;max-age=0;path=/'; await loadAll() }
+async function loadStats() {
+  try { const r = await fetch('/api/training-stats'); if (r.ok) stats.value = await r.json() } catch {}
+}
+async function loadMastery() {
+  try {
+    const r = await fetch('/api/skill-mastery')
+    if (r.ok) {
+      const d = await r.json()
+      stages.value = d.stages || []
+      tagFilters.value = d.tagFilters || []
+      const collapsed = new Set<string>()
+      for (const s of stages.value) { if (allMastered(s)) collapsed.add(s.label) }
+      collapsedStages.value = collapsed
+    }
+  } catch {}
+}
 async function loadAll() { await Promise.all([loadStats(), loadMastery()]) }
 
 // ── training stats ──
@@ -118,7 +134,7 @@ function tagColor(t: string) {
           <div class="hero-title"><IconUser :size="28" :stroke-width="2" style="vertical-align:-5px;margin-right:4px;" />{{ myName || '我的' }}</div>
           <div class="hero-sub">{{ myName ? '个人训练中心' : '记录每次练功，见证每步成长' }}</div>
         </div>
-        <button v-if="!myName" @click="showLogin=true"
+        <button v-if="!myName" @click="showLogin = true"
           style="background:rgba(255,255,255,0.25);backdrop-filter:blur(8px);border:1.5px solid rgba(255,255,255,0.4);color:#fff;padding:10px 20px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
           🔑 登录
         </button>
