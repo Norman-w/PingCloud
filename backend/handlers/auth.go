@@ -235,7 +235,7 @@ func AuthVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set identity cookie
-	token := hex.EncodeToString([]byte(fmt.Sprintf("%d:%d", pid, time.Now().Unix())))
+	token := fmt.Sprintf("%d:%d", pid, time.Now().Unix())
 	http.SetCookie(w, &http.Cookie{
 		Name: "ping_id", Value: token, Path: "/", MaxAge: 86400 * 30, HttpOnly: false,
 	})

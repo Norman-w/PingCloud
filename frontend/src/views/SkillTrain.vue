@@ -146,8 +146,6 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
         <div style="font-size:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ skillName }}</div>
         <div style="font-size:12px;opacity:0.85;">{{ skillCategory }}</div>
       </div>
-      <button v-if="!myName" @click="showLogin=true" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">登录</button>
-      <button v-else @click="logout" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;cursor:pointer;">{{ myName }} ✕</button>
     </div>
 
     <van-loading v-if="loading" class="empty-state" />
