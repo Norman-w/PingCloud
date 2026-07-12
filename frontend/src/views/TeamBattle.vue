@@ -261,8 +261,8 @@ const allPlayed = computed(() => unplayedCount.value === 0)
           <button @click="submitScore" style="flex:1;padding:12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">确认</button>
         </div>
         <div style="display:flex;gap:8px;">
-          <button @click="forfeitMatch('A')" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:10px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ current?.group_b_name }} 弃权</button>
-          <button @click="forfeitMatch('B')" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:10px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ current?.group_a_name }} 弃权</button>
+          <button @click="forfeitMatch('B')" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:10px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ scoreMatch?.b1_name }} 弃权</button>
+          <button @click="forfeitMatch('A')" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:10px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ scoreMatch?.a1_name }} 弃权</button>
         </div>
       </div>
     </div>
