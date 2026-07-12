@@ -56,16 +56,26 @@ function startTraining() {
   training.value = true; trainStart.value = Date.now(); trainElapsed.value = 0
   trainTimer = setInterval(() => { trainElapsed.value = Math.floor((Date.now() - trainStart.value) / 1000) }, 1000)
 }
-function stopTraining() { training.value = false; if (trainTimer) { clearInterval(trainTimer); trainTimer = null }; showConfirm.value = true }
+function stopTraining() { training.value = false; if (trainTimer) { clearInterval(trainTimer); trainTimer = null }; openConfirm() }
 
 // ── confirm/save ──
 const showConfirm = ref(false)
-const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref(''); const confirmSkillNotes = ref('')
+const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
 const saving = ref(false)
+// Location & player search
+const locSearch = ref(''); const locResults = ref<{id:number;name:string}[]>([]); const showLocDrop = ref(false)
+const playerSearch = ref(''); const playerResults = ref<{id:number;name:string}[]>([]); const showPlayerDrop = ref(false)
+async function searchLocs(q: string) { if(!q){locResults.value=[];return}; try{const r=await fetch('/api/locations?q='+encodeURIComponent(q));if(r.ok)locResults.value=await r.json()}catch{} }
+function pickLoc(name: string) { confirmLoc.value = name; showLocDrop.value = false; locSearch.value = '' }
+async function createLoc() { if(!locSearch.value.trim())return; try{const r=await fetch('/api/locations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:locSearch.value.trim()})});if(r.ok){const l=await r.json();confirmLoc.value=l.name;showLocDrop.value=false;locSearch.value=''}}catch{} }
+async function searchPlayers(q: string) { if(!q){playerResults.value=[];return}; try{const r=await fetch('/api/players?q='+encodeURIComponent(q));if(r.ok)playerResults.value=await r.json()}catch{} }
+function pickPlayer(name: string) { confirmPartner.value = name; showPlayerDrop.value = false; playerSearch.value = '' }
 function openConfirm() {
   confirmDate.value = new Date().toISOString().slice(0,10)
   confirmDuration.value = String(Math.ceil(trainElapsed.value / 60) || 60)
-  confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''; confirmSkillNotes.value = ''
+  confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
+  locSearch.value = ''; locResults.value = []; showLocDrop.value = false
+  playerSearch.value = ''; playerResults.value = []; showPlayerDrop.value = false
   showConfirm.value = true
 }
 async function saveRecord() {
@@ -246,8 +256,19 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
             <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">时长(分钟)</div><input v-model="confirmDuration" type="number" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
           </div>
           <div style="display:flex;gap:12px;margin-bottom:14px;">
-            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">地点</div><input v-model="confirmLoc" placeholder="球馆名称" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
-            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">陪练</div><input v-model="confirmPartner" placeholder="姓名" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
+            <div style="flex:1;position:relative;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">地点</div>
+              <input v-model="confirmLoc" placeholder="搜索或输入" @focus="showLocDrop=true" @input="searchLocs(($event.target as any).value)" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;" />
+              <div v-if="showLocDrop" style="position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e8e8e8;border-radius:10px;max-height:150px;overflow-y:auto;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.08);margin-top:2px;">
+                <div v-for="l in locResults" :key="l.id" @click="pickLoc(l.name)" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f5f5f5;">{{ l.name }}</div>
+                <div v-if="confirmLoc && locResults.length===0" @click="createLoc()" style="padding:10px 14px;cursor:pointer;color:#1989fa;font-size:14px;">+ 创建「{{ confirmLoc }}」</div>
+              </div>
+            </div>
+            <div style="flex:1;position:relative;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">陪练</div>
+              <input v-model="confirmPartner" placeholder="搜索球员" @focus="showPlayerDrop=true" @input="searchPlayers(($event.target as any).value)" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;" />
+              <div v-if="showPlayerDrop && playerResults.length>0" style="position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e8e8e8;border-radius:10px;max-height:150px;overflow-y:auto;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.08);margin-top:2px;">
+                <div v-for="p in playerResults" :key="p.id" @click="pickPlayer(p.name)" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f5f5f5;">{{ p.name }}</div>
+              </div>
+            </div>
           </div>
           <div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">练习量</div><input v-model="confirmAmount" placeholder="例: 5组、200球" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
           <div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">备注</div><textarea v-model="confirmNotes" placeholder="训练心得..." rows="2" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;"></textarea></div>

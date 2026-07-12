@@ -7,6 +7,7 @@ import LoginModal from '../components/LoginModal.vue'
 
 const router = useRouter()
 const showLogin = ref(false)
+const authReady = ref(false)
 
 // ── training stats ──
 interface TrainingStats { total_sessions: number; total_minutes: number; this_month_sessions: number; skill_frequencies: { skill_id: number; skill_name: string; category: string; count: number }[] }
@@ -27,8 +28,20 @@ function filteredSkills(skills: SkillItem[]): SkillItem[] { return activeTags.va
 function groupTag(label: string): string { const m: Record<string,string>={'正手技术':'正手','反手技术':'反手','进攻':'进攻','防守':'防守','上旋球':'上旋','下旋球':'下旋','短球':'短球','长球':'长球'}; return m[label]||label }
 function setTag(label: string) { const t=groupTag(label); const idx=activeTags.value.indexOf(t); if(idx>=0)activeTags.value.splice(idx,1); else activeTags.value.push(t) }
 
+// Sort stages: those with matching filtered skills first
+const sortedStages = computed(() => {
+  return [...stages.value].sort((a, b) => {
+    const aMatch = filteredSkills(a.skills).length
+    const bMatch = filteredSkills(b.skills).length
+    if (aMatch > 0 && bMatch === 0) return -1
+    if (bMatch > 0 && aMatch === 0) return 1
+    return 0
+  })
+})
+
 onMounted(async () => {
   await checkAuth()
+  authReady.value = true
   await loadAll()
 })
 
@@ -57,6 +70,12 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
 
 <template>
   <div class="safe-bottom">
+    <!-- Loading skeleton -->
+    <div v-if="!authReady" style="text-align:center;padding:120px 20px;">
+      <div style="width:36px;height:36px;border:3px solid #ebedf0;border-top-color:#1989fa;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;"></div>
+      <div style="color:#969799;font-size:14px;">加载中...</div>
+    </div>
+    <template v-else>
     <!-- Header -->
     <div class="hero" style="padding-bottom:24px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -97,7 +116,7 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
       </div>
 
       <!-- Stage sections -->
-      <div v-for="stage in stages" :key="stage.label" style="margin-bottom:16px;">
+      <div v-for="stage in sortedStages" :key="stage.label" style="margin-bottom:16px;">
         <div @click="toggleStage(stage.label)" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:12px;cursor:pointer;margin-bottom:6px;transition:all .15s;" :style="allMastered(stage)?'background:#e8f8ef;':'background:#f8f9fa;'">
           <div style="display:flex;align-items:center;gap:8px;">
             <IconFolderOpen v-if="!isCollapsed(stage)" :size="18" :stroke-width="2" :style="{color:allMastered(stage)?'#07c160':'#1989fa'}" />
@@ -121,7 +140,6 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
             </div>
             <div style="font-size:10px;color:#999;">
               <template v-if="item.practice_count>0">{{ item.practice_count }}次 · {{ Math.floor(item.total_duration_minutes/60) }}h{{ item.total_duration_minutes%60 }}m</template>
-              <template v-else>点击开始</template>
             </div>
             <div v-if="item.practice_count>0" style="margin-top:6px;height:2px;background:#e0e0e0;border-radius:1px;overflow:hidden;"><div style="height:100%;border-radius:1px;" :style="{width:Math.min(100,item.practice_count*20)+'%',background:statusStyle(item.status).border}"></div></div>
           </div>
@@ -129,6 +147,7 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
       </div>
     </div>
     <div style="height:8px;"></div>
+    </template>
   </div>
   <LoginModal v-model:visible="showLogin" />
 </template>
