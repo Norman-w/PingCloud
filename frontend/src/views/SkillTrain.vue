@@ -2,29 +2,16 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconClock, IconChevronDown, IconChevronUp, IconEdit } from '@tabler/icons-vue'
+import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconClock, IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
+import { myId, myName, checkAuth, logout as authLogout } from '../auth'
+import LoginModal from '../components/LoginModal.vue'
 
 const route = useRoute(); const router = useRouter()
 const skillId = Number(route.params.id)
 
 // ── auth ──
-const myId = ref(0); const myName = ref('')
-const showLogin = ref(false); const loginPhone = ref(''); const loginCode = ref('')
-const loginSending = ref(false); const loginMsg = ref(''); const loginStep = ref<'phone'|'code'>('phone')
-const countdown = ref(0); let cdTimer: any = null
-
-async function checkLogin() { try { const r = await fetch('/api/auth/me'); if (r.ok) { const d = await r.json(); if (d?.player_id) { myId.value = d.player_id; myName.value = d.player_name } } } catch {} }
-function openLogin() { loginStep.value = 'phone'; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; countdown.value = 0; if (cdTimer) clearInterval(cdTimer); showLogin.value = true }
-async function sendCode() {
-  if (!loginPhone.value) return; loginSending.value = true; loginMsg.value = ''
-  try { const r = await fetch('/api/auth/send-code', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value}) }); if (!r.ok) { loginMsg.value = await r.text() } else { loginStep.value = 'code'; countdown.value = 60; cdTimer = setInterval(() => { countdown.value--; if (countdown.value <= 0) { clearInterval(cdTimer); cdTimer = null } }, 1000) } } catch { loginMsg.value = '发送失败' }
-  finally { loginSending.value = false }
-}
-async function doLogin() {
-  if (!loginCode.value) return
-  try { const r = await fetch('/api/auth/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value, code:loginCode.value}) }); if (!r.ok) { loginMsg.value = '验证码错误'; return }; const d = await r.json(); myId.value = d.player_id; myName.value = d.player_name; showLogin.value = false; if (cdTimer) { clearInterval(cdTimer); cdTimer = null }; await loadData() } catch { loginMsg.value = '验证失败' }
-}
-function logout() { myId.value = 0; myName.value = ''; document.cookie = 'ping_id=;max-age=0;path=/'; loadData() }
+const showLogin = ref(false)
+function logout() { authLogout(); loadData() }
 
 // ── skill info ──
 const skillName = ref(''); const skillCategory = ref(''); const skillStatus = ref('none'); const skillTags = ref<string[]>([])
@@ -65,7 +52,7 @@ function toggleExpand(id: number) { const s = new Set(expandedHistory.value); s.
 const training = ref(false)
 const trainStart = ref(0); const trainElapsed = ref(0); let trainTimer: any = null
 function startTraining() {
-  if (!myId.value) { openLogin(); return }
+  if (!myId.value) { showLogin.value = true; return }
   training.value = true; trainStart.value = Date.now(); trainElapsed.value = 0
   trainTimer = setInterval(() => { trainElapsed.value = Math.floor((Date.now() - trainStart.value) / 1000) }, 1000)
 }
@@ -114,7 +101,7 @@ function polyPoints(vals: Record<string,number>) { return indicatorNames.value.m
 
 // ── load ──
 const loading = ref(true)
-onMounted(async () => { await checkLogin(); await loadData() })
+onMounted(async () => { await checkAuth(); await loadData() })
 async function loadData() {
   loading.value = true
   try {
@@ -127,7 +114,7 @@ async function loadData() {
   } catch {}
   loading.value = false
 }
-onUnmounted(() => { if (trainTimer) clearInterval(trainTimer); if (cdTimer) clearInterval(cdTimer) })
+onUnmounted(() => { if (trainTimer) clearInterval(trainTimer) })
 
 function defaults(id: number): Record<string,number> {
   const s: Record<number,string[]> = {}
@@ -159,7 +146,7 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
         <div style="font-size:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ skillName }}</div>
         <div style="font-size:12px;opacity:0.85;">{{ skillCategory }}</div>
       </div>
-      <button v-if="!myName" @click="openLogin" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">登录</button>
+      <button v-if="!myName" @click="showLogin=true" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">登录</button>
       <button v-else @click="logout" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;cursor:pointer;">{{ myName }} ✕</button>
     </div>
 
@@ -205,7 +192,7 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
         </div>
       </div>
       <div v-else style="padding:0 16px;margin-bottom:16px;">
-        <div @click="openLogin" style="background:linear-gradient(135deg,#f0f2f5,#e5e7eb);color:#999;border-radius:16px;padding:24px;text-align:center;cursor:pointer;border:2px dashed #ddd;">
+        <div @click="showLogin=true" style="background:linear-gradient(135deg,#f0f2f5,#e5e7eb);color:#999;border-radius:16px;padding:24px;text-align:center;cursor:pointer;border:2px dashed #ddd;">
           <div style="font-size:18px;font-weight:700;margin-bottom:4px;">🔒 登录后开始训练</div>
           <div style="font-size:13px;">点击登录，记录每一次进步</div>
         </div>
@@ -270,25 +257,6 @@ function formatTime(s: number) { const m = Math.floor(s/60); const sec = s%60; r
       </div>
     </div>
 
-    <!-- Login modal -->
-    <div v-if="showLogin" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;align-items:center;justify-content:center;" @click.self="showLogin=false">
-      <div style="background:#fff;border-radius:20px;padding:28px 24px;width:320px;max-width:90vw;">
-        <div style="text-align:center;font-size:40px;margin-bottom:8px;">🏓</div>
-        <h3 style="text-align:center;margin-bottom:4px;font-size:18px;">登录乒云</h3>
-        <div style="text-align:center;color:#999;font-size:13px;margin-bottom:16px;">短信验证，安全快捷</div>
-        <div v-if="loginMsg" style="text-align:center;font-size:12px;margin-bottom:8px;" :style="{color:loginMsg.includes('错误')||loginMsg.includes('失败')?'#e74c3c':'#07c160'}">{{ loginMsg }}</div>
-        <div v-if="loginStep==='phone'">
-          <input v-model="loginPhone" placeholder="手机号" type="tel" maxlength="11" style="width:100%;padding:14px;border:1.5px solid #e0e0e0;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;text-align:center;" />
-          <button @click="sendCode" :disabled="loginSending||countdown>0" style="width:100%;padding:14px;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(25,137,250,0.3);" :style="{background:(loginSending||countdown>0)?'#ccc':'linear-gradient(135deg,#1989fa,#1e88e5)',cursor:(loginSending||countdown>0)?'not-allowed':'pointer'}">{{ loginSending?'发送中...':countdown>0?`重新发送(${countdown}s)`:'获取验证码' }}</button>
-        </div>
-        <div v-else>
-          <div style="font-size:13px;color:#666;text-align:center;margin-bottom:8px;">已发送至 {{ loginPhone }}</div>
-          <input v-model="loginCode" placeholder="输入验证码" type="tel" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:14px;border:1.5px solid #1989fa;border-radius:12px;font-size:22px;font-weight:700;text-align:center;outline:none;box-sizing:border-box;margin-bottom:12px;letter-spacing:10px;" />
-          <button @click="doLogin" style="width:100%;padding:14px;background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;">验证登录</button>
-          <button @click="sendCode" :disabled="countdown>0" style="width:100%;padding:8px;margin-top:6px;background:none;border:none;font-size:13px;cursor:pointer;" :style="{color:countdown>0?'#ccc':'#1989fa',cursor:countdown>0?'not-allowed':'pointer'}">{{ countdown>0?`${countdown}s后重发`:'重新发送' }}</button>
-        </div>
-        <button @click="showLogin=false" style="width:100%;padding:10px;margin-top:8px;background:none;border:none;color:#999;font-size:14px;cursor:pointer;">取消</button>
-      </div>
-    </div>
+    <LoginModal v-model:visible="showLogin" />
   </div>
 </template>
