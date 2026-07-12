@@ -96,6 +96,16 @@ async function submitScore() {
   scoreDialog.value = false
 }
 
+async function forfeitMatch(winner: string) {
+  if (!scoreMatch.value || !current.value) return
+  await fetch(`/api/team-battles/${current.value.id}/matches/${scoreMatch.value.id}/forfeit`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({winner_team:winner}),
+  })
+  current.value = await fetch(`/api/team-battles/${current.value.id}`).then(r=>r.json())
+  scoreDialog.value = false
+}
+
 async function completeBattle() {
   if (!current.value) return
   try {
@@ -246,9 +256,13 @@ const allPlayed = computed(() => unplayedCount.value === 0)
             <input v-model="scoreB" type="number" inputmode="numeric" style="width:80px;padding:12px;border:2px solid #ee0a24;border-radius:12px;font-size:24px;font-weight:700;text-align:center;outline:none;" />
           </div>
         </div>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button @click="scoreDialog=false" style="flex:1;padding:12px;background:#f5f5f5;border:none;border-radius:12px;font-size:15px;cursor:pointer;">取消</button>
           <button @click="submitScore" style="flex:1;padding:12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">确认</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button @click="forfeitMatch('A')" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:10px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ current?.group_b_name }} 弃权</button>
+          <button @click="forfeitMatch('B')" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:10px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ current?.group_a_name }} 弃权</button>
         </div>
       </div>
     </div>

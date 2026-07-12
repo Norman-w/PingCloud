@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
+import { showToast, showSuccessToast, showLoadingToast } from 'vant'
 import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconClock, IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
 import { myId, myName, checkAuth, logout as authLogout } from '../auth'
 import LoginModal from '../components/LoginModal.vue'
@@ -91,15 +91,17 @@ function openConfirm() {
 
 async function saveRecord() {
   saving.value = true
+  const loadingToast = showLoadingToast({ message: '提交中...', forbidClick: true, duration: 0 })
   try {
     const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: parseInt(confirmDuration.value)||60,
       location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value,
       practice_amount: confirmAmount.value, skill_notes: '', energy_rating: 0, feel_rating: 0,
       indicators: confirmIndicators.value }
     const r = await fetch('/api/skill-train', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    loadingToast.close()
     if (!r.ok) { showToast(await r.text() || '保存失败'); return }
-    showSuccessToast('已保存'); showConfirm.value = false; router.back()
-  } catch (e: any) { showToast('保存失败') }
+    showSuccessToast('保存成功 ✅'); showConfirm.value = false; router.back()
+  } catch (e: any) { loadingToast.close(); showToast('保存失败') }
   finally { saving.value = false }
 }
 

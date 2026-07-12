@@ -385,6 +385,7 @@ func main() {
 		path := strings.TrimPrefix(r.URL.Path, "/api/team-battles/")
 		switch r.Method {
 		case http.MethodPost:
+			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/forfeit") { handlers.ForfeitTeamBattleMatch(w, r); return }
 			if strings.Contains(path, "/matches/") { handlers.ScoreTeamBattleMatch(w, r); return }
 			if path == "complete" || strings.HasSuffix(path, "/complete") { handlers.CompleteTeamBattle(w, r); return }
 			handlers.CreateTeamBattle(w, r)

@@ -366,4 +366,61 @@ func DeleteTeamBattle(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
+// ForfeitTeamBattleMatch marks a team battle match as forfeited
+func ForfeitTeamBattleMatch(w http.ResponseWriter, r *http.Request) {
+	// Path: /api/team-battles/{battleID}/matches/{matchID}/forfeit
+	path := strings.TrimPrefix(r.URL.Path, "/api/team-battles/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 4 || parts[1] != "matches" || parts[3] != "forfeit" {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	battleID, _ := strconv.Atoi(parts[0])
+	matchID, _ := strconv.Atoi(parts[2])
+
+	var req struct {
+		WinnerTeam string `json:"winner_team"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.WinnerTeam != "A" && req.WinnerTeam != "B") {
+		http.Error(w, "winner_team must be A or B", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Verify match belongs to battle
+	var actualBattleID int
+	var wasPlayed bool
+	tx.QueryRow(`SELECT battle_id, played FROM team_battle_matches WHERE id=$1 FOR UPDATE`, matchID).Scan(&actualBattleID, &wasPlayed)
+	if actualBattleID != battleID {
+		http.Error(w, "match not found", http.StatusNotFound)
+		return
+	}
+	if wasPlayed {
+		http.Error(w, "match already played", http.StatusBadRequest)
+		return
+	}
+
+	// Mark as forfeited: played=true, scores=0, winner_team = the non-forfeiting team
+	_, err = tx.Exec(`UPDATE team_battle_matches SET score_a=0, score_b=0, winner_team=$1, played=true WHERE id=$2`, req.WinnerTeam, matchID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return updated battle
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 var _ = rand.Int
