@@ -81,7 +81,7 @@ func sendSMS(phone, code string) error {
 		"PhoneNumbers":     phone,
 		"SignName":         signName,
 		"TemplateCode":     templateCode,
-		"TemplateParam":    `{"code":"` + code + `","product":"PingCloud"}`,
+		"TemplateParam":    `{"code":"` + code + `","product":"乒云"}`,
 		"SignatureMethod":  "HMAC-SHA1",
 		"SignatureVersion": "1.0",
 		"SignatureNonce":   hex.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano()))),
