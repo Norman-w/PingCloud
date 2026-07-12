@@ -11,14 +11,18 @@ const myId = ref(0); const myName = ref('')
 // ── login ──
 const showLogin = ref(false)
 const loginPhone = ref(''); const loginCode = ref(''); const loginSending = ref(false); const loginMsg = ref('')
+const loginStep = ref<'phone'|'code'>('phone')
+const countdown = ref(0); let countdownTimer: any = null
+
+function openLoginModal() { showLogin.value = true; loginStep.value = 'phone'; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; countdown.value = 0; if (countdownTimer) clearInterval(countdownTimer) }
 async function sendCode() {
   if (!loginPhone.value) return; loginSending.value = true; loginMsg.value = ''
-  try { const r = await fetch('/api/auth/send-code', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value}) }); if (!r.ok) { loginMsg.value = await r.text() } else { loginMsg.value = '验证码已发送' } } catch { loginMsg.value = '发送失败' }
+  try { const r = await fetch('/api/auth/send-code', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value}) }); if (!r.ok) { loginMsg.value = await r.text() } else { loginStep.value = 'code'; countdown.value = 60; countdownTimer = setInterval(() => { countdown.value--; if (countdown.value <= 0) { clearInterval(countdownTimer); countdownTimer = null } }, 1000) } } catch { loginMsg.value = '发送失败' }
   finally { loginSending.value = false }
 }
 async function doLogin() {
   if (!loginCode.value) return
-  try { const r = await fetch('/api/auth/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value, code:loginCode.value}) }); if (!r.ok) { loginMsg.value = '验证码错误'; return }; const d = await r.json(); myId.value = d.player_id; myName.value = d.player_name; showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; await loadAll() } catch { loginMsg.value = '验证失败' }
+  try { const r = await fetch('/api/auth/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:loginPhone.value, code:loginCode.value}) }); if (!r.ok) { loginMsg.value = '验证码错误'; return }; const d = await r.json(); myId.value = d.player_id; myName.value = d.player_name; showLogin.value = false; loginPhone.value = ''; loginCode.value = ''; loginMsg.value = ''; loginStep.value = 'phone'; if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }; countdown.value = 0; await loadAll() } catch { loginMsg.value = '验证失败' }
 }
 async function logout() { myId.value = 0; myName.value = ''; document.cookie = 'ping_id=;max-age=0;path=/'; await loadAll() }
 async function loadStats() {
@@ -111,10 +115,10 @@ function statusStyle(status: string) {
 const tagIcons: Record<string, string> = {
   '正手': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
   '反手': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" transform="scale(-1,1) translate(-24,0)"/></svg>`,
-  '进攻': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`,
+  '进攻': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><!-- right-pointing index+middle fingers together --><path d="M8 16V8a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="14" y1="7" x2="20" y2="7"/><line x1="14" y1="11" x2="20" y2="11"/></svg>`,
   '防守': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 5v6c0 5.5-3.8 10.7-8 12-4.2-1.3-8-6.5-8-12V7l8-5z"/></svg>`,
-  '上旋': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 1-1 19.95"/><path d="M12 7v5l3 3"/></svg>`,
-  '下旋': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22a10 10 0 1 1 1-19.95"/><path d="M12 7v5l-3 3"/></svg>`,
+  '上旋': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><!-- fist side view, pinky extended --><ellipse cx="6" cy="13" rx="4" ry="5"/><line x1="9" y1="9" x2="14" y2="4"/></svg>`,
+  '下旋': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><!-- fist side view, thumb extended --><ellipse cx="7" cy="12" rx="4" ry="5"/><line x1="11" y1="13" x2="18" y2="10"/></svg>`,
   '短球': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>`,
   '长球': `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><line x1="12" y1="4" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="20"/></svg>`,
 }
@@ -134,7 +138,7 @@ function tagColor(t: string) {
           <div class="hero-title"><IconUser :size="28" :stroke-width="2" style="vertical-align:-5px;margin-right:4px;" />{{ myName || '我的' }}</div>
           <div class="hero-sub">{{ myName ? '个人训练中心' : '记录每次练功，见证每步成长' }}</div>
         </div>
-        <button v-if="!myName" @click="showLogin = true"
+        <button v-if="!myName" @click="openLoginModal"
           style="background:rgba(255,255,255,0.25);backdrop-filter:blur(8px);border:1.5px solid rgba(255,255,255,0.4);color:#fff;padding:10px 20px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
           🔑 登录
         </button>
@@ -237,15 +241,23 @@ function tagColor(t: string) {
         <div style="text-align:center;font-size:40px;margin-bottom:8px;">🏓</div>
         <h3 style="text-align:center;margin-bottom:4px;font-size:18px;">登录乒云</h3>
         <div style="text-align:center;color:#999;font-size:13px;margin-bottom:16px;">短信验证，安全快捷</div>
-        <div v-if="loginMsg" style="text-align:center;font-size:12px;margin-bottom:8px;" :style="{color:loginMsg.includes('发送')||loginMsg.includes('已发送')?'#07c160':'#e74c3c'}">{{ loginMsg }}</div>
-        <div v-if="!loginCode">
+        <div v-if="loginMsg" style="text-align:center;font-size:12px;margin-bottom:8px;" :style="{color:loginMsg.includes('错误')||loginMsg.includes('失败')?'#e74c3c':'#07c160'}">{{ loginMsg }}</div>
+        <div v-if="loginStep==='phone'">
           <input v-model="loginPhone" placeholder="手机号" type="tel" maxlength="11" style="width:100%;padding:14px;border:1.5px solid #e0e0e0;border-radius:12px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;text-align:center;" />
-          <button @click="sendCode" :disabled="loginSending" style="width:100%;padding:14px;background:linear-gradient(135deg,#1989fa,#1e88e5);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(25,137,250,0.3);">{{ loginSending?'发送中...':'获取验证码' }}</button>
+          <button @click="sendCode" :disabled="loginSending || countdown > 0"
+            style="width:100%;padding:14px;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(25,137,250,0.3);"
+            :style="{background:(loginSending||countdown>0)?'#ccc':'linear-gradient(135deg,#1989fa,#1e88e5)',cursor:(loginSending||countdown>0)?'not-allowed':'pointer'}">
+            {{ loginSending?'发送中...':countdown>0?`重新发送 (${countdown}s)`:'获取验证码' }}
+          </button>
         </div>
         <div v-else>
           <div style="font-size:13px;color:#666;text-align:center;margin-bottom:8px;">验证码已发送至 {{ loginPhone }}</div>
           <input v-model="loginCode" placeholder="输入验证码" type="tel" maxlength="4" style="width:100%;padding:14px;border:1.5px solid #1989fa;border-radius:12px;font-size:22px;font-weight:700;text-align:center;outline:none;box-sizing:border-box;margin-bottom:12px;letter-spacing:10px;" />
           <button @click="doLogin" style="width:100%;padding:14px;background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;">验证登录</button>
+          <button @click="sendCode" :disabled="countdown > 0" style="width:100%;padding:8px;margin-top:6px;background:none;border:none;font-size:13px;cursor:pointer;"
+            :style="{color:countdown>0?'#ccc':'#1989fa',cursor:countdown>0?'not-allowed':'pointer'}">
+            {{ countdown > 0 ? `${countdown}s 后重新发送` : '重新发送验证码' }}
+          </button>
         </div>
         <button @click="showLogin=false" style="width:100%;padding:10px;margin-top:8px;background:none;border:none;color:#999;font-size:14px;cursor:pointer;">取消</button>
       </div>
