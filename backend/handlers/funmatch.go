@@ -72,6 +72,7 @@ type FunMatchInfo struct {
 	WinnerTeam       string          `json:"winner_team"`
 	HandicapPoints   int             `json:"handicap_points"`
 	Played           bool            `json:"played"`
+	Forfeit          bool            `json:"forfeit"`
 	Draws            []FunDrawRecord `json:"draws"`
 }
 
@@ -297,8 +298,8 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 	prows, err := db.DB.Query(
 		`SELECT * FROM (
 			SELECT p.id, p.name, p.current_rating, COALESCE(p.reference_rating,0) AS reference_rating, fsp.team,
-				COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false THEN 1 ELSE 0 END), 0) AS wins,
-				COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS losses,
+				COALESCE(SUM(CASE WHEN fm.winner_id = p.id AND fm.played = true AND fm.deleted = false AND fm.forfeit = false THEN 1 ELSE 0 END), 0) AS wins,
+				COALESCE(SUM(CASE WHEN fm.winner_id IS NOT NULL AND fm.winner_id != p.id AND fm.played = true AND fm.deleted = false AND fm.forfeit = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN 1 ELSE 0 END), 0) AS losses,
 				COALESCE(SUM(CASE WHEN fm.played = true AND fm.deleted = false AND (fm.male_player_id = p.id OR fm.female_player_id = p.id) THEN
 					CASE WHEN fm.winner_id = p.id THEN 2 ELSE 1 END
 				ELSE 0 END), 0) AS points,
@@ -363,7 +364,7 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 			fm.game2_score_male, fm.game2_score_female,
 			fm.game3_score_male, fm.game3_score_female,
 			fm.winner_id, COALESCE(fm.winner_team,''),
-			fm.handicap_points, fm.played
+			fm.handicap_points, fm.played, fm.forfeit
 		FROM fun_matches fm
 		JOIN players ma ON ma.id = fm.male_player_id
 		JOIN players fa ON fa.id = fm.female_player_id
@@ -378,7 +379,7 @@ func GetFunSession(w http.ResponseWriter, r *http.Request) {
 				&m.Game1ScoreMale, &m.Game1ScoreFemale,
 				&m.Game2ScoreMale, &m.Game2ScoreFemale,
 				&m.Game3ScoreMale, &m.Game3ScoreFemale,
-				&m.WinnerID, &m.WinnerTeam, &m.HandicapPoints, &m.Played)
+				&m.WinnerID, &m.WinnerTeam, &m.HandicapPoints, &m.Played, &m.Forfeit)
 			detail.Matches = append(detail.Matches, m)
 		}
 	}
@@ -816,7 +817,7 @@ func ForfeitFunMatch(w http.ResponseWriter, r *http.Request) {
 		winnerTeam = "A"
 	}
 
-	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_team=$1, played=true WHERE id=$2`, winnerTeam, matchID)
+	_, err = tx.Exec(`UPDATE fun_matches SET game1_score_male=0, game1_score_female=0, game2_score_male=0, game2_score_female=0, winner_team=$1, played=true, forfeit=true WHERE id=$2`, winnerTeam, matchID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

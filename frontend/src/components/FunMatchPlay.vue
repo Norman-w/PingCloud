@@ -31,6 +31,7 @@ export interface FunMatchItem {
   winner_team: string
   handicap_points: number
   played: boolean
+  forfeit: boolean
   draws: FunDrawRecord[]
 }
 
@@ -257,7 +258,7 @@ function drawColor(d: FunDrawRecord): string {
             <template v-if="m.played">
               {{ matchScoreSummary(m) }}
               <span style="font-size:10px;display:block;"
-                :style="{color: m.winner_team === 'male' ? '#1989fa' : '#ee0a24'}">{{ matchWinnerName(m) }} 胜</span>
+                :style="{color: m.forfeit ? '#ff976a' : m.winner_team==='male'?'#1989fa':'#ee0a24'}">{{ m.forfeit ? '弃权' : matchWinnerName(m)+' 胜' }}</span>
             </template>
             <template v-else>
               <span style="color:#c8c9cc;font-size:13px;">待录入</span>
