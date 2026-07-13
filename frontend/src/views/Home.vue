@@ -5,10 +5,25 @@ import { showToast } from 'vant'
 import { IconPingPong, IconSwords, IconTrophy, IconScoreboard, IconSpeakerphone, IconTournament, IconPlus, IconChevronRight } from '@tabler/icons-vue'
 import { api, type RankingEntry } from '../api'
 import { unreadCount } from '../bulletins'
+import { myId } from '../auth'
 
 const router = useRouter()
 const rankings = ref<RankingEntry[]>([])
 const loading = ref(true)
+const showAll = ref(false)
+const hideInactive = ref(false)
+
+const displayRankings = computed(() => {
+  let list = rankings.value
+  if (hideInactive.value) list = list.filter(p => p.matches_played > 0)
+  if (!showAll.value) return list.slice(0, 10)
+  return list
+})
+const hiddenCount = computed(() => {
+  let list = rankings.value
+  if (hideInactive.value) list = list.filter(p => p.matches_played > 0)
+  return Math.max(0, list.length - 10)
+})
 
 // Sessions on home page
 interface SessionSummary {
@@ -123,16 +138,27 @@ function winRate(p: RankingEntry) {
       <p class="text-hint">点击上方按钮开始</p>
     </div>
 
-    <div v-else class="card" style="padding: 0; overflow: hidden;">
+    <!-- Toggle: hide inactive -->
+    <div v-else style="display:flex;align-items:center;gap:8px;padding:4px 16px 8px;font-size:12px;">
+      <span @click="hideInactive=!hideInactive" style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#969799;user-select:none;">
+        <span style="width:18px;height:18px;border-radius:5px;border:2px solid #d0d0d0;display:flex;align-items:center;justify-content:center;transition:all .15s;" :style="hideInactive?'background:#1989fa;border-color:#1989fa;':''">
+          <span v-if="hideInactive" style="color:#fff;font-size:11px;font-weight:700;">✓</span>
+        </span>
+        隐藏未参与者
+      </span>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden;">
       <div
-        v-for="(p, i) in rankings"
+        v-for="(p, i) in displayRankings"
         :key="p.id"
         class="player-item"
+        :style="myId>0 && p.id===myId ? {background:'#e8f4ff',borderLeft:'3px solid #1989fa'} : {}"
         @click="goPlayer(p.id)"
       >
         <div class="player-rank" :class="rankClass(i)">{{ i + 1 }}</div>
         <div class="player-info">
-          <div class="player-name">{{ p.name }}</div>
+          <div class="player-name" :style="myId>0&&p.id===myId?{color:'#1989fa',fontWeight:700}:{}">{{ p.name }}{{ myId>0&&p.id===myId?' 👈':'' }}</div>
           <div class="player-record">
             {{ p.matches_played }} 场 · {{ p.wins }} 胜 {{ p.losses }} 负
             <template v-if="p.forfeits"> · 弃权 {{ p.forfeits }}</template>
@@ -143,6 +169,16 @@ function winRate(p: RankingEntry) {
           {{ p.current_rating }}
         </div>
       </div>
+    </div>
+
+    <!-- Load more / show less -->
+    <div v-if="hiddenCount > 0 && !showAll" @click="showAll=true"
+      style="text-align:center;padding:12px;color:#1989fa;font-size:14px;font-weight:600;cursor:pointer;background:#fff;margin:0 16px;border-radius:0 0 12px 12px;box-shadow:var(--c-shadow);margin-top:-1px;">
+      加载更多 ({{ hiddenCount }}人) ▾
+    </div>
+    <div v-else-if="showAll && rankings.length > 10" @click="showAll=false"
+      style="text-align:center;padding:10px;color:#969799;font-size:13px;cursor:pointer;">
+      收起 ▴
     </div>
 
     <!-- Recent Sessions -->
