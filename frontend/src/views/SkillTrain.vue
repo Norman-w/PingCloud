@@ -125,7 +125,7 @@ async function saveRecord() {
     const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: parseInt(confirmDuration.value)||60,
       location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value,
       practice_amount: confirmAmount.value, skill_notes: '', energy_rating: 0, feel_rating: 0,
-      indicators: confirmIndicators.value }
+      indicators: confirmIndicators.value, goal_values: {} }
     const r = await fetch('/api/skill-train', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     loadingToast.close()
     if (!r.ok) { showToast(await r.text() || '保存失败'); return }
@@ -155,6 +155,11 @@ function gridPoints(lv: number) { return indicatorNames.value.map((_,i)=>{const 
 function polyPoints(vals: Record<string,number>) { return indicatorNames.value.map((_,i)=>{const p=radarPoint(i,vals[indicatorNames.value[i]]||1);return`${p.x},${p.y}`}).join(' ') }
 
 // ── load ──
+// ── goals ──
+interface GoalProgress { id:number; label:string; unit:string; tier_1:number; tier_2:number; tier_3:number; tier_4:number; tier_5:number; min_stars:number; current_value:number; stars:number; passed:boolean }
+const skillGoals = ref<GoalProgress[]>([])
+const showGoals = ref(false)
+
 const loading = ref(true)
 onMounted(async () => { await checkAuth(); await loadData() })
 async function loadData() {
@@ -167,6 +172,7 @@ async function loadData() {
     const r = await fetch('/api/skill-mastery')
     if (r.ok) { const d = await r.json(); const item = (d.skills||[]).find((s:any)=>s.id===skillId); if (item) { skillStatus.value = item.status; skillTags.value = item.tags||[] } }
   } catch {}
+  try { const r = await fetch('/api/skill-goals/'+skillId); if (r.ok) skillGoals.value = await r.json() } catch {}
   loading.value = false
 }
 onUnmounted(() => { if (trainTimer) clearInterval(trainTimer) })
@@ -223,6 +229,33 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
           <text v-for="(name,i) in indicatorNames" :key="'v'+i" :x="radarPoint(i,displayIndicators[name]).x" :y="radarPoint(i,displayIndicators[name]).y-10" text-anchor="middle" font-size="10" font-weight="700" fill="#1989fa">{{ displayIndicators[name] }}</text>
           <text v-for="(name,i) in indicatorNames" :key="'l'+i" :x="labelPos(i).x" :y="labelPos(i).y" :text-anchor="labelPos(i).anchor" font-size="11" font-weight="600" fill="#333">{{ name }}</text>
         </svg>
+      </div>
+
+      <!-- Goals / 评定标准 -->
+      <div v-if="skillGoals.length>0" style="padding:0 16px;margin-bottom:12px;">
+        <div @click="showGoals=!showGoals" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-radius:12px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <span style="font-weight:600;font-size:14px;color:#333;">📋 评定标准</span>
+          <span style="font-size:12px;color:#999;">{{ skillGoals.filter(g=>g.passed).length }}/{{ skillGoals.length }} 达标 ▾</span>
+        </div>
+        <div v-if="showGoals" style="background:#fff;border-radius:0 0 12px 12px;padding:0 16px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div v-for="g in skillGoals" :key="g.id" style="padding:10px 0;border-bottom:1px solid #f5f5f5;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <span style="font-weight:600;font-size:13px;">{{ g.label }} <span style="font-weight:400;color:#999;">({{ g.unit }})</span></span>
+              <span style="font-size:11px;" :style="{color:g.passed?'#07c160':'#ff976a'}">{{ g.passed?'✓ 已达标':'需'+g.min_stars+'★'}}</span>
+            </div>
+            <div style="font-size:11px;color:#999;margin-bottom:4px;">
+              当前 {{ g.current_value }}{{ g.unit }} ·
+              <span v-for="t in [g.tier_1,g.tier_2,g.tier_3,g.tier_4,g.tier_5]" :key="t" style="margin:0 2px;"
+                :style="{color:g.current_value>=t?'#f5a623':'#ccc',fontWeight:g.current_value>=t?600:400}">
+                {{ t>0?'★'+t:'—' }}
+              </span>
+            </div>
+            <div style="height:3px;background:#e8e8e8;border-radius:2px;overflow:hidden;">
+              <div style="height:100%;border-radius:2px;transition:width .3s;"
+                :style="{width:Math.min(100,g.current_value/Math.max(1,g.tier_3)*100)+'%',background:g.passed?'#07c160':'#f5a623'}"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Training button (if logged in) -->

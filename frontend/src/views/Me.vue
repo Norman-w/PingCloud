@@ -141,7 +141,6 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
             <div style="font-size:10px;color:#999;">
               <template v-if="item.practice_count>0">{{ item.practice_count }}次 · {{ Math.floor(item.total_duration_minutes/3600) }}h{{ Math.floor((item.total_duration_minutes%3600)/60) }}m</template>
             </div>
-            <div v-if="item.practice_count>0" style="margin-top:6px;height:2px;background:#e0e0e0;border-radius:1px;overflow:hidden;"><div style="height:100%;border-radius:1px;" :style="{width:Math.min(100,item.practice_count*20)+'%',background:statusStyle(item.status).border}"></div></div>
           </div>
         </div>
       </div>
