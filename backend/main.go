@@ -570,6 +570,14 @@ func main() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
+	// Skill goals
+	mux.HandleFunc("/api/skill-goals/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		if r.Method == http.MethodGet { handlers.GetSkillGoals(w, r); return }
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))

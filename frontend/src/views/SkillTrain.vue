@@ -7,6 +7,7 @@ import { myId, myName, checkAuth, logout as authLogout } from '../auth'
 import LoginModal from '../components/LoginModal.vue'
 import LocationPicker from '../components/LocationPicker.vue'
 import PlayerPicker from '../components/PlayerPicker.vue'
+import StartTrainingDialog from '../components/StartTrainingDialog.vue'
 
 const route = useRoute(); const router = useRouter()
 const skillId = Number(route.params.id)
@@ -53,10 +54,37 @@ function toggleExpand(id: number) { const s = new Set(expandedHistory.value); s.
 // ── training mode ──
 const training = ref(false)
 const trainStart = ref(0); const trainElapsed = ref(0); let trainTimer: any = null
-function startTraining() {
+const targetSeconds = ref(0)
+const showStartDialog = ref(false)
+const startDialogRef = ref<InstanceType<typeof StartTrainingDialog>>()
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const osc = ctx.createOscillator(); const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.frequency.value = 880; osc.type = 'square'; gain.gain.value = 0.3
+    osc.start(); osc.stop(ctx.currentTime + 0.15)
+    setTimeout(() => { const osc2 = ctx.createOscillator(); osc2.connect(gain); osc2.frequency.value = 1200; osc2.type = 'square'; osc2.start(); osc2.stop(ctx.currentTime + 0.2) }, 200)
+  } catch {}
+}
+
+function openStartDialog() {
   if (!myId.value) { showLogin.value = true; return }
+  startDialogRef.value?.loadGoals?.(skillId)
+  showStartDialog.value = true
+}
+
+function startTraining(durationMin: number) {
+  targetSeconds.value = durationMin * 60
   training.value = true; trainStart.value = Date.now(); trainElapsed.value = 0
-  trainTimer = setInterval(() => { trainElapsed.value = Math.floor((Date.now() - trainStart.value) / 1000) }, 1000)
+  trainTimer = setInterval(() => {
+    trainElapsed.value = Math.floor((Date.now() - trainStart.value) / 1000)
+    if (targetSeconds.value > 0 && trainElapsed.value >= targetSeconds.value) {
+      clearInterval(trainTimer); trainTimer = null
+      beep()
+    }
+  }, 1000)
 }
 function stopTraining() { training.value = false; if (trainTimer) { clearInterval(trainTimer); trainTimer = null }; openConfirm() }
 
@@ -199,7 +227,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
 
       <!-- Training button (if logged in) -->
       <div v-if="myId" style="padding:0 16px;margin-bottom:16px;">
-        <div v-if="!training" @click="startTraining"
+        <div v-if="!training" @click="openStartDialog"
           style="background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;border-radius:16px;padding:28px;text-align:center;cursor:pointer;box-shadow:0 6px 20px rgba(7,193,96,0.3);transition:transform .1s;">
           <IconPlayerPlay :size="40" :stroke-width="2" style="display:block;margin:0 auto 8px;" />
           <div style="font-size:22px;font-weight:800;">开练</div>
@@ -209,7 +237,9 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
           style="background:linear-gradient(135deg,#ee0a24,#ff4757);color:#fff;border-radius:16px;padding:28px;text-align:center;box-shadow:0 6px 20px rgba(238,10,36,0.3);">
           <IconClock :size="40" :stroke-width="2" style="display:block;margin:0 auto 8px;" />
           <div style="font-size:36px;font-weight:800;font-variant-numeric:tabular-nums;">{{ formatTime(trainElapsed) }}</div>
-          <div style="font-size:13px;opacity:0.85;margin:4px 0 16px;">训练进行中...</div>
+          <div style="font-size:13px;opacity:0.85;margin:4px 0 4px;">训练进行中...</div>
+          <div v-if="targetSeconds>0" style="font-size:13px;opacity:0.7;margin-bottom:16px;">⏱ 目标 {{ formatTime(targetSeconds) }} · {{ trainElapsed>=targetSeconds?'✅ 已完成！':'剩余 '+formatTime(targetSeconds-trainElapsed) }}</div>
+          <div v-else style="margin-bottom:16px;"></div>
           <button @click="stopTraining"
             style="background:#fff;color:#ee0a24;border:none;padding:14px 40px;border-radius:24px;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto;">
             <IconPlayerStop :size="20" /> 结束训练
@@ -300,6 +330,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
     </div>
 
     <LoginModal v-model:visible="showLogin" />
+  <StartTrainingDialog ref="startDialogRef" v-model:visible="showStartDialog" @start="startTraining" />
   <LocationPicker v-model="confirmLoc" v-model:visible="showLocPicker" />
   <PlayerPicker v-model="confirmPartner" v-model:visible="showPlayerPicker" />
   </div>
