@@ -567,6 +567,7 @@ func main() {
 		cors(w)
 		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
 		if r.Method == http.MethodPost { handlers.CreateSkillTraining(w, r); return }
+		if r.Method == http.MethodPut { handlers.UpdateSkillTraining(w, r); return }
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 

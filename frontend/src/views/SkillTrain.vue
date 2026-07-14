@@ -108,6 +108,7 @@ const showConfirm = ref(false)
 const confirmDate = ref(''); const confirmDurationH = ref(''); const confirmDurationM = ref(''); const confirmDurationS = ref('')
 const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
 const confirmIndicators = ref<Record<string,number>>({})
+const editingLogId = ref(0)  // 0 = new, >0 = editing existing
 const goalValues = ref<Record<string,number>>({})
 const saving = ref(false)
 const hasData = computed(() => history.value.length > 0)
@@ -126,7 +127,24 @@ function onDown(e:PointerEvent){const p=getPos(e);let best=-1;let minD=Infinity;
 function onMove(e:PointerEvent){if(!dragging.value||activeAxis.value<0)return;const p=getPos(e);const i=activeAxis.value;const n=confirmKeys.value.length;const a=(2*Math.PI*i)/n-Math.PI/2;const proj=(p.x-editCX)*Math.cos(a)+(p.y-editCY)*Math.sin(a);const v=Math.round(Math.max(1,Math.min(5,proj/editR*5)));confirmIndicators.value={...confirmIndicators.value,[confirmKeys.value[i]]:v}}
 function onUp(){dragging.value=false;activeAxis.value=-1}
 
+function editRecord(h: HistEntry) {
+  editingLogId.value = h.id
+  confirmDate.value = h.date
+  const sec = h.duration_minutes
+  confirmDurationH.value = String(Math.floor(sec/3600))
+  confirmDurationM.value = String(Math.floor((sec%3600)/60))
+  confirmDurationS.value = String(sec%60)
+  confirmLoc.value = h.location
+  confirmPartner.value = h.partner
+  confirmNotes.value = h.notes
+  confirmAmount.value = h.practice_amount
+  confirmIndicators.value = JSON.parse(JSON.stringify(h.indicators || defaults(skillId)))
+  goalValues.value = {}
+  showConfirm.value = true
+}
+
 function openConfirm() {
+  editingLogId.value = 0
   confirmDate.value = new Date().toISOString().slice(0,10)
   const totalSec = trainElapsed.value || 3600
   confirmDurationH.value = String(Math.floor(totalSec/3600))
@@ -150,7 +168,9 @@ async function saveRecord() {
       location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value,
       practice_amount: confirmAmount.value, skill_notes: '', energy_rating: 0, feel_rating: 0,
       indicators: confirmIndicators.value, goal_values: goalValues.value }
-    const r = await fetch('/api/skill-train', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    const url = editingLogId.value ? `/api/skill-train/${editingLogId.value}` : '/api/skill-train'
+    const method = editingLogId.value ? 'PUT' : 'POST'
+    const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     loadingToast.close()
     if (!r.ok) { showToast(await r.text() || '保存失败'); return }
     showSuccessToast('保存成功 ✅'); showConfirm.value = false; router.back()
@@ -338,7 +358,10 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
               <div style="font-size:11px;color:#bbb;">{{ new Date(h.created_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) }}</div>
               <div style="font-size:12px;color:#999;margin-top:2px;">{{ formatTime(h.duration_minutes) }}<template v-if="h.partner"> · {{ h.partner }}</template><template v-if="h.location"> · {{ h.location }}</template></div>
             </div>
-            <IconChevronDown :size="18" style="color:#ccc;" :style="{transform:expandedHistory.has(h.id)?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}" />
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span @click.stop="editRecord(h)" style="font-size:18px;cursor:pointer;padding:4px;" title="编辑">✏️</span>
+              <IconChevronDown :size="18" style="color:#ccc;" :style="{transform:expandedHistory.has(h.id)?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}" />
+            </div>
           </div>
           <div v-if="expandedHistory.has(h.id)" style="padding:0 14px 14px;border-top:1px solid #f5f5f5;">
             <div v-if="h.indicators && Object.keys(h.indicators).length>0" style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;">
@@ -359,7 +382,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
       <div style="background:#fff;min-height:100vh;padding:0 0 80px;">
         <div style="background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
           <button @click="showConfirm=false" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">取消</button>
-          <span style="font-weight:700;font-size:18px;">训练完成 🎉</span>
+          <span style="font-weight:700;font-size:18px;">{{ editingLogId ? '✏️ 编辑记录' : '训练完成 🎉' }}</span>
           <button @click="saveRecord" :disabled="saving" style="background:rgba(255,255,255,0.25);border:none;color:#fff;font-size:15px;font-weight:600;padding:8px 20px;border-radius:16px;cursor:pointer;">{{ saving?'保存中...':'保存' }}</button>
         </div>
         <div style="padding:16px;">

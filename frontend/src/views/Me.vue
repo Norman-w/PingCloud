@@ -101,7 +101,7 @@ function tagColor(t: string) { const m: Record<string,string>={'正手':'#1989fa
     <div v-if="stats.skill_frequencies&&stats.skill_frequencies.length>0" style="margin:0 16px 12px;">
       <div class="section-title" style="padding-left:0;"><IconFlame :size="18" :stroke-width="2" style="vertical-align:-3px;margin-right:6px;" />常练技能</div>
       <div class="card" style="margin:0;display:flex;flex-wrap:wrap;gap:8px;">
-        <span v-for="(sk,i) in stats.skill_frequencies.slice(0,10)" :key="sk.skill_id" style="font-size:13px;padding:4px 10px;border-radius:6px;font-weight:500;" :style="{background:i<3?'#e8f4ff':'#f5f5f5',color:i<3?'#1989fa':'#646566'}">{{ sk.skill_name }} ×{{ sk.count }}</span>
+        <span v-for="(sk,i) in stats.skill_frequencies.slice(0,10)" :key="sk.skill_id" @click="router.push({name:'SkillTrain',params:{id:sk.skill_id}})" style="font-size:13px;padding:4px 10px;border-radius:6px;font-weight:500;cursor:pointer;" :style="{background:i<3?'#e8f4ff':'#f5f5f5',color:i<3?'#1989fa':'#646566'}">{{ sk.skill_name }} ×{{ sk.count }}</span>
       </div>
     </div>
 

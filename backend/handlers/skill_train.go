@@ -175,3 +175,50 @@ func CreateSkillTraining(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, log)
 }
+
+// UpdateSkillTraining updates an existing training log
+func UpdateSkillTraining(w http.ResponseWriter, r *http.Request) {
+	pid := getPlayerIDFromCookie(r)
+	if pid == 0 { http.Error(w, "请先登录", http.StatusUnauthorized); return }
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/skill-train/")
+	logID, err := strconv.Atoi(idStr)
+	if err != nil { http.Error(w, "invalid id", http.StatusBadRequest); return }
+
+	// Verify ownership
+	var owner int
+	db.DB.QueryRow(`SELECT player_id FROM training_logs WHERE id=$1`, logID).Scan(&owner)
+	if owner != pid { http.Error(w, "forbidden", http.StatusForbidden); return }
+
+	var req struct {
+		SkillID         int                    `json:"skill_id"`
+		Date            string                 `json:"date"`
+		DurationMinutes int                    `json:"duration_minutes"`
+		Location        string                 `json:"location"`
+		Partner         string                 `json:"partner"`
+		EnergyRating    int                    `json:"energy_rating"`
+		FeelRating      int                    `json:"feel_rating"`
+		Notes           string                 `json:"notes"`
+		PracticeAmount  string                 `json:"practice_amount"`
+		SkillNotes      string                 `json:"skill_notes"`
+		Indicators      map[string]interface{} `json:"indicators"`
+		GoalValues      map[string]interface{} `json:"goal_values"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "invalid body", http.StatusBadRequest); return }
+
+	indicatorsJSON := "{}"
+	if req.Indicators != nil && len(req.Indicators) > 0 {
+		if b, err := json.Marshal(req.Indicators); err == nil { indicatorsJSON = string(b) }
+	}
+	goalValuesJSON := "{}"
+	if req.GoalValues != nil && len(req.GoalValues) > 0 {
+		if b, err := json.Marshal(req.GoalValues); err == nil { goalValuesJSON = string(b) }
+	}
+
+	db.DB.Exec(`UPDATE training_logs SET date=$1, duration_minutes=$2, location=$3, partner=$4, energy_rating=$5, feel_rating=$6, notes=$7 WHERE id=$8`,
+		req.Date, req.DurationMinutes, req.Location, req.Partner, req.EnergyRating, req.FeelRating, req.Notes, logID)
+	db.DB.Exec(`UPDATE training_log_skills SET practice_amount=$1, notes=$2, indicators=$3::jsonb, goal_values=$4::jsonb WHERE training_log_id=$5 AND skill_id=$6`,
+		req.PracticeAmount, req.SkillNotes, indicatorsJSON, goalValuesJSON, logID, req.SkillID)
+
+	writeJSON(w, map[string]string{"status": "ok"})
+}
