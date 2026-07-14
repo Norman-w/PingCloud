@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { IconSearch, IconUsers } from '@tabler/icons-vue'
+import { ref, watch, computed } from 'vue'
+import { IconSearch, IconUsers, IconUser } from '@tabler/icons-vue'
+import { myId } from '../auth'
 
 const model = defineModel<string>('modelValue', { default: '' })
 const visible = defineModel<boolean>('visible', { default: false })
 
 const search = ref('')
-const list = ref<{ id: number; name: string }[]>([])
+const rawList = ref<{ id: number; name: string }[]>([])
+
+// Filter out self
+const list = computed(() => rawList.value.filter(p => p.id !== myId.value))
 
 async function load(q?: string) {
   const url = q ? `/api/players?q=${encodeURIComponent(q)}` : '/api/players'
-  try { const r = await fetch(url); if (r.ok) list.value = await r.json() } catch {}
+  try { const r = await fetch(url); if (r.ok) rawList.value = await r.json() } catch {}
 }
 
 watch(visible, async (v) => {
@@ -39,6 +43,22 @@ function select(name: string) { model.value = name; visible.value = false }
       </div>
       <!-- List -->
       <div style="flex:1;overflow-y:auto;padding:0 16px;">
+        <!-- Solo option -->
+        <div @click="select('独自训练')" style="padding:14px 0;cursor:pointer;border-bottom:1px solid #f5f5f5;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:36px;height:36px;border-radius:10px;background:#e8f4ff;display:flex;align-items:center;justify-content:center;">
+              <IconUser :size="18" :stroke-width="2" style="color:#1989fa;" />
+            </div>
+            <div>
+              <div style="font-size:15px;font-weight:600;">独自训练</div>
+              <div style="font-size:12px;color:#999;">无需陪练，自己练习</div>
+            </div>
+          </div>
+          <div style="width:22px;height:22px;border-radius:50%;border:2px solid #ddd;display:flex;align-items:center;justify-content:center;" :style="model==='独自训练'?'background:#1989fa;border-color:#1989fa;':''">
+            <span v-if="model==='独自训练'" style="color:#fff;font-size:12px;">✓</span>
+          </div>
+        </div>
+        <!-- Player list -->
         <div v-if="list.length===0" style="text-align:center;padding:40px 0;color:#bbb;font-size:14px;">暂无匹配球员</div>
         <div v-for="p in list" :key="p.id" @click="select(p.name)" style="padding:14px 0;cursor:pointer;border-bottom:1px solid #f5f5f5;display:flex;align-items:center;justify-content:space-between;">
           <div>
