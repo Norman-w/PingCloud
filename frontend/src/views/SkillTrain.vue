@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast } from 'vant'
-import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconClock, IconChevronDown, IconChevronUp } from '@tabler/icons-vue'
+import { IconArrowLeft, IconPlayerPlay, IconPlayerStop, IconClock, IconChevronDown, IconChevronUp, IconEdit } from '@tabler/icons-vue'
 import { myId, myName, checkAuth, logout as authLogout } from '../auth'
 import LoginModal from '../components/LoginModal.vue'
 import LocationPicker from '../components/LocationPicker.vue'
@@ -115,11 +115,11 @@ const hasData = computed(() => history.value.length > 0)
 const showLocPicker = ref(false); const showPlayerPicker = ref(false)
 // Editable radar
 const confirmKeys = computed(() => Object.keys(confirmIndicators.value))
-const editW = 260; const editH = 280; const editCX = 130; const editCY = 125; const editR = 90
+const editW = 360; const editH = 340; const editCX = 180; const editCY = 150; const editR = 80
 const svgRef = ref<SVGSVGElement>(); const activeAxis = ref(-1); const dragging = ref(false)
 function editPt(i:number,v:number){const n=confirmKeys.value.length;if(!n)return{x:editCX,y:editCY};const a=(2*Math.PI*i)/n-Math.PI/2;return{x:editCX+(editR*v/5)*Math.cos(a),y:editCY+(editR*v/5)*Math.sin(a)}}
 function editEnd(i:number){const n=confirmKeys.value.length;if(!n)return{x:editCX,y:editCY};const a=(2*Math.PI*i)/n-Math.PI/2;return{x:editCX+editR*Math.cos(a),y:editCY+editR*Math.sin(a)}}
-function editLbl(i:number){const e=editEnd(i);const dx=e.x-editCX;const dy=e.y-editCY;const d=Math.hypot(dx,dy);const nx=dx/d;const ny=dy/d;return{x:editCX+nx*(editR+20),y:editCY+ny*(editR+16),anchor:Math.abs(nx)>0.7?(nx>0?'start':'end'):'middle'}}
+function editLbl(i:number){const e=editEnd(i);const dx=e.x-editCX;const dy=e.y-editCY;const d=Math.hypot(dx,dy);const nx=dx/d;const ny=dy/d;return{x:editCX+nx*(editR+40),y:editCY+ny*(editR+30),anchor:Math.abs(nx)>0.25?(nx>0?'start':'end'):'middle'}}
 function editGrid(lv:number){return confirmKeys.value.map((_,i)=>{const p=editPt(i,lv);return`${p.x},${p.y}`}).join(' ')}
 function editPoly(){return confirmKeys.value.map((_,i)=>{const p=editPt(i,confirmIndicators.value[confirmKeys.value[i]]||1);return`${p.x},${p.y}`}).join(' ')}
 function getPos(e:PointerEvent){const s=svgRef.value!;const r=s.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*editW,y:(e.clientY-r.top)/r.height*editH}}
@@ -359,7 +359,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
               <div style="font-size:12px;color:#999;margin-top:2px;">{{ formatTime(h.duration_minutes) }}<template v-if="h.partner"> · {{ h.partner }}</template><template v-if="h.location"> · {{ h.location }}</template></div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
-              <span @click.stop="editRecord(h)" style="font-size:18px;cursor:pointer;padding:4px;" title="编辑">✏️</span>
+              <IconEdit @click.stop="editRecord(h)" :size="16" :stroke-width="2" style="color:#ccc;cursor:pointer;flex-shrink:0;" />
               <IconChevronDown :size="18" style="color:#ccc;" :style="{transform:expandedHistory.has(h.id)?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}" />
             </div>
           </div>
@@ -382,7 +382,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
       <div style="background:#fff;min-height:100vh;padding:0 0 80px;">
         <div style="background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
           <button @click="showConfirm=false" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;">取消</button>
-          <span style="font-weight:700;font-size:18px;">{{ editingLogId ? '✏️ 编辑记录' : '训练完成 🎉' }}</span>
+          <span style="font-weight:700;font-size:18px;">{{ editingLogId ? '编辑记录' : '训练完成' }}</span>
           <button @click="saveRecord" :disabled="saving" style="background:rgba(255,255,255,0.25);border:none;color:#fff;font-size:15px;font-weight:600;padding:8px 20px;border-radius:16px;cursor:pointer;">{{ saving?'保存中...':'保存' }}</button>
         </div>
         <div style="padding:16px;">
@@ -395,7 +395,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
           <!-- Editable radar chart -->
           <div style="margin-bottom:16px;display:flex;flex-direction:column;align-items:center;">
             <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">📊 拖拽调整指标</div>
-            <svg ref="svgRef" :viewBox="`0 0 ${editW} ${editH}`" width="260" height="280" style="max-width:100%;touch-action:none;cursor:pointer;" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onUp">
+            <svg ref="svgRef" :viewBox="`0 0 ${editW} ${editH}`" width="360" height="340" style="max-width:100vw;touch-action:none;cursor:pointer;" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onUp">
               <polygon v-for="lv in [1,2,3,4,5]" :key="lv" :points="editGrid(lv)" fill="none" :stroke="lv===5?'#d0d0d0':'#e8e8e8'" stroke-width="1" :stroke-dasharray="lv===5?'0':'4,3'" />
               <line v-for="(_,i) in confirmKeys" :key="'ax'+i" :x1="editCX" :y1="editCY" :x2="editEnd(i).x" :y2="editEnd(i).y" stroke="#e0e0e0" stroke-width="1" />
               <polygon :points="editPoly()" fill="rgba(7,193,96,0.15)" stroke="#07c160" stroke-width="2" />
