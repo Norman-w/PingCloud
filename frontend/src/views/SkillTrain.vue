@@ -105,7 +105,8 @@ function stopTraining() { training.value = false; if (trainTimer) { clearInterva
 
 // ── confirm/save ──
 const showConfirm = ref(false)
-const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
+const confirmDate = ref(''); const confirmDurationH = ref(''); const confirmDurationM = ref(''); const confirmDurationS = ref('')
+const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
 const confirmIndicators = ref<Record<string,number>>({})
 const goalValues = ref<Record<string,number>>({})
 const saving = ref(false)
@@ -127,7 +128,10 @@ function onUp(){dragging.value=false;activeAxis.value=-1}
 
 function openConfirm() {
   confirmDate.value = new Date().toISOString().slice(0,10)
-  confirmDuration.value = String(trainElapsed.value || 60)
+  const totalSec = trainElapsed.value || 3600
+  confirmDurationH.value = String(Math.floor(totalSec/3600))
+  confirmDurationM.value = String(Math.floor((totalSec%3600)/60))
+  confirmDurationS.value = String(totalSec%60)
   confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
   goalValues.value = {}
   const base = {...defaults(skillId)}
@@ -142,7 +146,7 @@ async function saveRecord() {
   saving.value = true
   const loadingToast = showLoadingToast({ message: '提交中...', forbidClick: true, duration: 0 })
   try {
-    const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: parseInt(confirmDuration.value)||60,
+    const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: (parseInt(confirmDurationH.value)||0)*3600 + (parseInt(confirmDurationM.value)||0)*60 + (parseInt(confirmDurationS.value)||0),
       location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value,
       practice_amount: confirmAmount.value, skill_notes: '', energy_rating: 0, feel_rating: 0,
       indicators: confirmIndicators.value, goal_values: goalValues.value }
@@ -155,7 +159,7 @@ async function saveRecord() {
 }
 
 // ── radar chart ──
-const radarW = 320; const radarH = 320; const radarCX = 160; const radarCY = 150; const radarR = 85
+const radarW = 360; const radarH = 340; const radarCX = 180; const radarCY = 150; const radarR = 80
 const indicatorNames = computed(() => Object.keys(displayIndicators.value))
 function radarPoint(i: number, val: number) {
   const n = indicatorNames.value.length; if (n===0) return {x:radarCX,y:radarCY}
@@ -169,7 +173,7 @@ function axisEnd(i: number) {
 }
 function labelPos(i: number) {
   const e = axisEnd(i); const dx=e.x-radarCX; const dy=e.y-radarCY; const d=Math.hypot(dx,dy); const nx=dx/d; const ny=dy/d
-  return {x:radarCX+nx*(radarR+32), y:radarCY+ny*(radarR+26), anchor:Math.abs(nx)>0.4?(nx>0?'start':'end'):'middle'}
+  return {x:radarCX+nx*(radarR+40), y:radarCY+ny*(radarR+30), anchor:Math.abs(nx)>0.25?(nx>0?'start':'end'):'middle'}
 }
 function gridPoints(lv: number) { return indicatorNames.value.map((_,i)=>{const p=radarPoint(i,lv);return`${p.x},${p.y}`}).join(' ') }
 function polyPoints(vals: Record<string,number>) { return indicatorNames.value.map((_,i)=>{const p=radarPoint(i,vals[indicatorNames.value[i]]||1);return`${p.x},${p.y}`}).join(' ') }
@@ -249,7 +253,7 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
           <div style="font-size:13px;color:#ccc;margin-top:4px;">开始训练后，指标数据将在此展示</div>
         </div>
         <!-- Radar with data -->
-        <svg v-else :viewBox="`0 0 ${radarW} ${radarH}`" width="300" height="300" style="max-width:100%;">
+        <svg v-else :viewBox="`0 0 ${radarW} ${radarH}`" width="360" height="340" style="max-width:100vw;">
           <polygon v-for="lv in [1,2,3,4,5]" :key="lv" :points="gridPoints(lv)" fill="none" :stroke="lv===5?'#d0d0d0':'#e8e8e8'" stroke-width="1" :stroke-dasharray="lv===5?'0':'4,3'" />
           <line v-for="(_,i) in indicatorNames" :key="'ax'+i" :x1="radarCX" :y1="radarCY" :x2="axisEnd(i).x" :y2="axisEnd(i).y" stroke="#e0e0e0" stroke-width="1" />
           <polygon :points="polyPoints(displayIndicators)" fill="rgba(25,137,250,0.12)" stroke="#1989fa" stroke-width="2" />
@@ -380,7 +384,15 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
           <!-- Editable fields -->
           <div style="display:flex;gap:12px;margin-bottom:14px;">
             <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">日期</div><input v-model="confirmDate" type="date" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
-            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">时长(秒)</div><input v-model="confirmDuration" type="number" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px;">
+            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">时长</div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <input v-model="confirmDurationH" type="number" min="0" placeholder="0" style="width:50px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;text-align:center;outline:none;" /><span style="font-size:13px;color:#999;">时</span>
+                <input v-model="confirmDurationM" type="number" min="0" max="59" placeholder="0" style="width:50px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;text-align:center;outline:none;" /><span style="font-size:13px;color:#999;">分</span>
+                <input v-model="confirmDurationS" type="number" min="0" max="59" placeholder="0" style="width:50px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;text-align:center;outline:none;" /><span style="font-size:13px;color:#999;">秒</span>
+              </div>
+            </div>
           </div>
           <div style="display:flex;gap:12px;margin-bottom:14px;">
             <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px;">地点</div>
