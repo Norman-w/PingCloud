@@ -561,6 +561,7 @@ func main() {
 		cors(w)
 		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
 		if r.Method == http.MethodGet { handlers.GetSkillTrainHistory(w, r); return }
+		if r.Method == http.MethodPut { handlers.UpdateSkillTraining(w, r); return }
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 	mux.HandleFunc("/api/skill-train", func(w http.ResponseWriter, r *http.Request) {
