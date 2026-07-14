@@ -59,7 +59,7 @@ var skillAttrMap = map[int]skillAttrs{
 	// ── 基本功 (1-19) ──
 	1:  {FH, Attack, "topspin",  "short", "none"},  // 正手攻球
 	2:  {BH, Defense, "none",    "short", "none"},  // 反手拨球
-	3:  {FH, Attack, "topspin",  "long",  "none"},  // 正手前冲弧圈
+	3:  {FH, Defense, "topspin","long",  "none"},  // 正手拉反胶防守球
 	4:  {FH, Attack, "topspin",  "mixed", "none"},  // 正手加转弧圈
 	5:  {BH, Attack, "topspin",  "long",  "none"},  // 反手拉球
 	6:  {FH, Defense, "backspin","short", "none"},  // 正手搓球
@@ -121,6 +121,11 @@ var skillAttrMap = map[int]skillAttrs{
 	57: {BodyNone, Neutral, "none","mixed","none"},  // 并步摸台
 	58: {BodyNone, Neutral, "none","mixed","none"},  // 接下落球
 	59: {FH, Neutral, "mixed", "mixed","none"},      // 三脚架引手和回收
+	// ── 拉球技术 (60-63) ──
+	60: {FH, Defense, "topspin", "long",  "none"},  // 正手反胶对拉
+	61: {FH, Attack,  "topspin", "long",  "none"},  // 正手拉前冲
+	62: {FH, Attack,  "topspin", "mixed", "none"},  // 正手拉侧弧圈
+	63: {FH, Defense, "backspin","mixed","none"},   // 正手拉长胶削球
 }
 
 // GetSkillMastery returns all skills with mastery status, tags, and training stats
