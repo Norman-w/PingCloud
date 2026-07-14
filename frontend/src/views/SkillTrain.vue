@@ -130,8 +130,11 @@ function openConfirm() {
   confirmDuration.value = String(trainElapsed.value || 60)
   confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
   goalValues.value = {}
-  const src = (hasData.value && history.value[0]?.indicators && Object.keys(history.value[0].indicators).length>0) ? history.value[0].indicators : defaults(skillId)
-  confirmIndicators.value = JSON.parse(JSON.stringify(src))
+  const base = {...defaults(skillId)}
+  if (hasData.value && history.value[0]?.indicators) {
+    for (const [k,v] of Object.entries(history.value[0].indicators)) { if (k in base) base[k]=v }
+  }
+  confirmIndicators.value = JSON.parse(JSON.stringify(base))
   showConfirm.value = true
 }
 
