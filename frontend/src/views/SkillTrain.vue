@@ -20,7 +20,7 @@ function logout() { authLogout(); loadData() }
 const skillName = ref(''); const skillCategory = ref(''); const skillStatus = ref('none'); const skillTags = ref<string[]>([])
 
 // ── indicators ──
-interface HistEntry { id: number; date: string; duration_minutes: number; location: string; partner: string; notes: string; practice_amount: string; skill_notes: string; indicators: Record<string,number> }
+interface HistEntry { id: number; date: string; duration_minutes: number; location: string; partner: string; notes: string; practice_amount: string; skill_notes: string; indicators: Record<string,number>; created_at: string }
 const history = ref<HistEntry[]>([])
 const indicatorMode = ref<'current'|'max'|'avg'>('current')
 const currentIndicators = computed(() => {
@@ -296,7 +296,8 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
         <div v-for="h in visibleHistory" :key="h.id" style="background:#fff;border-radius:12px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
           <div @click="toggleExpand(h.id)" style="padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
             <div>
-              <div style="font-weight:600;font-size:14px;">{{ h.date }}</div>
+              <div style="font-weight:600;font-size:14px;">{{ new Date(h.created_at).toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'short'}) }}</div>
+              <div style="font-size:11px;color:#bbb;">{{ new Date(h.created_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) }}</div>
               <div style="font-size:12px;color:#999;margin-top:2px;">{{ formatTime(h.duration_minutes) }}<template v-if="h.partner"> · {{ h.partner }}</template><template v-if="h.location"> · {{ h.location }}</template></div>
             </div>
             <IconChevronDown :size="18" style="color:#ccc;" :style="{transform:expandedHistory.has(h.id)?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}" />
