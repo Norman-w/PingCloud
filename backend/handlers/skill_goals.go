@@ -52,7 +52,8 @@ func GetSkillGoals(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var g GoalDef
-		rows.Scan(&g.ID, &g.SkillID, &g.Label, &g.Unit, &g.Tier1, &g.Tier2, &g.Tier3, &g.Tier4, &g.Tier5, &g.MinStars)
+		var sort int
+		rows.Scan(&g.ID, &g.SkillID, &g.Label, &g.Unit, &g.Tier1, &g.Tier2, &g.Tier3, &g.Tier4, &g.Tier5, &g.MinStars, &sort)
 		gp := GoalProgress{GoalDef: g}
 
 		if pid > 0 {
@@ -122,7 +123,8 @@ func GetGoalDefinitions(w http.ResponseWriter, r *http.Request) {
 	defs := make([]GoalDef, 0)
 	for rows.Next() {
 		var g GoalDef
-		rows.Scan(&g.ID, &g.SkillID, &g.Label, &g.Unit, &g.Tier1, &g.Tier2, &g.Tier3, &g.Tier4, &g.Tier5, &g.MinStars)
+		var sort int
+		rows.Scan(&g.ID, &g.SkillID, &g.Label, &g.Unit, &g.Tier1, &g.Tier2, &g.Tier3, &g.Tier4, &g.Tier5, &g.MinStars, &sort)
 		defs = append(defs, g)
 	}
 	writeJSON(w, defs)
