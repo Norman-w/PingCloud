@@ -285,11 +285,19 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
 
       <!-- Training button (if logged in) -->
       <div v-if="myId" style="padding:0 16px;margin-bottom:16px;">
-        <div v-if="!training" @click="openStartDialog"
-          style="background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;border-radius:16px;padding:28px;text-align:center;cursor:pointer;box-shadow:0 6px 20px rgba(7,193,96,0.3);transition:transform .1s;">
-          <IconPlayerPlay :size="40" :stroke-width="2" style="display:block;margin:0 auto 8px;" />
-          <div style="font-size:22px;font-weight:800;">开练</div>
-          <div style="font-size:13px;opacity:0.85;margin-top:4px;">点击开始记录本次训练</div>
+        <div v-if="!training" style="display:flex;gap:10px;">
+          <div @click="openStartDialog"
+            style="flex:3;background:linear-gradient(135deg,#07c160,#00bfa5);color:#fff;border-radius:16px;padding:24px;text-align:center;cursor:pointer;box-shadow:0 6px 20px rgba(7,193,96,0.3);transition:transform .1s;">
+            <IconPlayerPlay :size="36" :stroke-width="2" style="display:block;margin:0 auto 6px;" />
+            <div style="font-size:20px;font-weight:800;">开练</div>
+            <div style="font-size:12px;opacity:0.85;margin-top:4px;">点击开始记录本次训练</div>
+          </div>
+          <div @click="openConfirm()"
+            style="flex:1;background:#f0f2f5;color:#666;border-radius:16px;padding:16px 12px;text-align:center;cursor:pointer;border:2px dashed #d0d0d0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+            <div style="font-size:18px;">📝</div>
+            <div style="font-size:14px;font-weight:700;">补录</div>
+            <div style="font-size:11px;color:#999;">手动填写</div>
+          </div>
         </div>
         <div v-else
           style="background:linear-gradient(135deg,#ee0a24,#ff4757);color:#fff;border-radius:16px;padding:28px;text-align:center;box-shadow:0 6px 20px rgba(238,10,36,0.3);">

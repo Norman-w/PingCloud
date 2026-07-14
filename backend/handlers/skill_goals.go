@@ -62,8 +62,9 @@ func GetSkillGoals(w http.ResponseWriter, r *http.Request) {
 					JOIN training_logs tl ON tl.id=tls.training_log_id
 					WHERE tls.skill_id=$1 AND tl.player_id=$2`, skillID, pid).Scan(&gp.CurrentValue)
 			} else {
-				// Sum goal_values JSONB field across all sessions for this skill+player
-				var total int
+				// "单次"=MAX, others=SUM
+				isMax := strings.HasPrefix(g.Label, "单次")
+				var value int
 				jsonRows, err := db.DB.Query(`SELECT tls.goal_values FROM training_log_skills tls
 					JOIN training_logs tl ON tl.id=tls.training_log_id
 					WHERE tls.skill_id=$1 AND tl.player_id=$2`, skillID, pid)
@@ -76,13 +77,13 @@ func GetSkillGoals(w http.ResponseWriter, r *http.Request) {
 						if json.Unmarshal([]byte(gvStr), &gv) == nil {
 							if v, ok := gv[g.Label]; ok {
 								if n, ok := v.(float64); ok {
-									total += int(n)
+									if isMax { if int(n) > value { value = int(n) } } else { value += int(n) }
 								}
 							}
 						}
 					}
 				}
-				gp.CurrentValue = total
+				gp.CurrentValue = value
 			}
 		}
 
