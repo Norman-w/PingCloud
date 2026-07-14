@@ -155,7 +155,7 @@ async function saveRecord() {
 }
 
 // ── radar chart ──
-const radarW = 280; const radarH = 300; const radarCX = 140; const radarCY = 135; const radarR = 95
+const radarW = 320; const radarH = 320; const radarCX = 160; const radarCY = 150; const radarR = 85
 const indicatorNames = computed(() => Object.keys(displayIndicators.value))
 function radarPoint(i: number, val: number) {
   const n = indicatorNames.value.length; if (n===0) return {x:radarCX,y:radarCY}
@@ -169,7 +169,7 @@ function axisEnd(i: number) {
 }
 function labelPos(i: number) {
   const e = axisEnd(i); const dx=e.x-radarCX; const dy=e.y-radarCY; const d=Math.hypot(dx,dy); const nx=dx/d; const ny=dy/d
-  return {x:radarCX+nx*(radarR+22), y:radarCY+ny*(radarR+18), anchor:Math.abs(nx)>0.7?(nx>0?'start':'end'):'middle'}
+  return {x:radarCX+nx*(radarR+32), y:radarCY+ny*(radarR+26), anchor:Math.abs(nx)>0.4?(nx>0?'start':'end'):'middle'}
 }
 function gridPoints(lv: number) { return indicatorNames.value.map((_,i)=>{const p=radarPoint(i,lv);return`${p.x},${p.y}`}).join(' ') }
 function polyPoints(vals: Record<string,number>) { return indicatorNames.value.map((_,i)=>{const p=radarPoint(i,vals[indicatorNames.value[i]]||1);return`${p.x},${p.y}`}).join(' ') }
@@ -242,13 +242,20 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
             style="padding:6px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
             :style="indicatorMode===m.k?'background:#1989fa;color:#fff;':'color:#666;'">{{ m.l }}</span>
         </div>
-        <svg :viewBox="`0 0 ${radarW} ${radarH}`" width="280" height="300" style="max-width:100%;">
+        <!-- No data -->
+        <div v-if="!hasData" style="text-align:center;padding:40px 20px;color:#bbb;">
+          <div style="font-size:48px;margin-bottom:8px;">📊</div>
+          <div style="font-size:15px;font-weight:600;color:#999;">暂无训练数据</div>
+          <div style="font-size:13px;color:#ccc;margin-top:4px;">开始训练后，指标数据将在此展示</div>
+        </div>
+        <!-- Radar with data -->
+        <svg v-else :viewBox="`0 0 ${radarW} ${radarH}`" width="300" height="300" style="max-width:100%;">
           <polygon v-for="lv in [1,2,3,4,5]" :key="lv" :points="gridPoints(lv)" fill="none" :stroke="lv===5?'#d0d0d0':'#e8e8e8'" stroke-width="1" :stroke-dasharray="lv===5?'0':'4,3'" />
           <line v-for="(_,i) in indicatorNames" :key="'ax'+i" :x1="radarCX" :y1="radarCY" :x2="axisEnd(i).x" :y2="axisEnd(i).y" stroke="#e0e0e0" stroke-width="1" />
           <polygon :points="polyPoints(displayIndicators)" fill="rgba(25,137,250,0.12)" stroke="#1989fa" stroke-width="2" />
           <circle v-for="(name,i) in indicatorNames" :key="'pt'+i" :cx="radarPoint(i,displayIndicators[name]).x" :cy="radarPoint(i,displayIndicators[name]).y" r="5" fill="#fff" stroke="#1989fa" stroke-width="2" />
           <text v-for="(name,i) in indicatorNames" :key="'v'+i" :x="radarPoint(i,displayIndicators[name]).x" :y="radarPoint(i,displayIndicators[name]).y-10" text-anchor="middle" font-size="10" font-weight="700" fill="#1989fa">{{ displayIndicators[name].toFixed(2) }}</text>
-          <text v-for="(name,i) in indicatorNames" :key="'l'+i" :x="labelPos(i).x" :y="labelPos(i).y" :text-anchor="labelPos(i).anchor" font-size="11" font-weight="600" fill="#333">{{ name }}</text>
+          <text v-for="(name,i) in indicatorNames" :key="'l'+i" :x="labelPos(i).x" :y="labelPos(i).y" :text-anchor="labelPos(i).anchor" font-size="12" font-weight="600" fill="#333">{{ name }}</text>
         </svg>
       </div>
 
