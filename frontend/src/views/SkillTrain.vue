@@ -228,19 +228,16 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
           <line v-for="(_,i) in indicatorNames" :key="'ax'+i" :x1="radarCX" :y1="radarCY" :x2="axisEnd(i).x" :y2="axisEnd(i).y" stroke="#e0e0e0" stroke-width="1" />
           <polygon :points="polyPoints(displayIndicators)" fill="rgba(25,137,250,0.12)" stroke="#1989fa" stroke-width="2" />
           <circle v-for="(name,i) in indicatorNames" :key="'pt'+i" :cx="radarPoint(i,displayIndicators[name]).x" :cy="radarPoint(i,displayIndicators[name]).y" r="5" fill="#fff" stroke="#1989fa" stroke-width="2" />
-          <text v-for="(name,i) in indicatorNames" :key="'v'+i" :x="radarPoint(i,displayIndicators[name]).x" :y="radarPoint(i,displayIndicators[name]).y-10" text-anchor="middle" font-size="10" font-weight="700" fill="#1989fa">{{ displayIndicators[name] }}</text>
+          <text v-for="(name,i) in indicatorNames" :key="'v'+i" :x="radarPoint(i,displayIndicators[name]).x" :y="radarPoint(i,displayIndicators[name]).y-10" text-anchor="middle" font-size="10" font-weight="700" fill="#1989fa">{{ displayIndicators[name].toFixed(2) }}</text>
           <text v-for="(name,i) in indicatorNames" :key="'l'+i" :x="labelPos(i).x" :y="labelPos(i).y" :text-anchor="labelPos(i).anchor" font-size="11" font-weight="600" fill="#333">{{ name }}</text>
         </svg>
       </div>
 
-      <!-- Goals / 评定标准 -->
+      <!-- Goals / 评定标准 (always visible) -->
       <div v-if="skillGoals.length>0" style="padding:0 16px;margin-bottom:12px;">
-        <div @click="showGoals=!showGoals" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-radius:12px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
-          <span style="font-weight:600;font-size:14px;color:#333;">📋 评定标准</span>
-          <span style="font-size:12px;color:#999;">{{ skillGoals.filter(g=>g.passed).length }}/{{ skillGoals.length }} 达标 ▾</span>
-        </div>
-        <div v-if="showGoals" style="background:#fff;border-radius:0 0 12px 12px;padding:0 16px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
-          <div v-for="g in skillGoals" :key="g.id" style="padding:10px 0;border-bottom:1px solid #f5f5f5;">
+        <div style="background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="font-weight:600;font-size:14px;color:#333;margin-bottom:10px;">📋 评定标准 · {{ skillGoals.filter(g=>g.passed).length }}/{{ skillGoals.length }} 达标</div>
+          <div v-for="g in skillGoals" :key="g.id" style="padding:8px 0;border-bottom:1px solid #f5f5f5;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
               <span style="font-weight:600;font-size:13px;">{{ g.label }} <span style="font-weight:400;color:#999;">({{ g.unit }})</span></span>
               <span style="font-size:11px;" :style="{color:g.passed?'#07c160':'#ff976a'}">{{ g.passed?'✓ 已达标':'需'+g.min_stars+'★'}}</span>
