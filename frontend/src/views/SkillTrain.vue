@@ -92,6 +92,7 @@ function stopTraining() { training.value = false; if (trainTimer) { clearInterva
 const showConfirm = ref(false)
 const confirmDate = ref(''); const confirmDuration = ref(''); const confirmLoc = ref(''); const confirmPartner = ref(''); const confirmNotes = ref(''); const confirmAmount = ref('')
 const confirmIndicators = ref<Record<string,number>>({})
+const goalValues = ref<Record<string,number>>({})
 const saving = ref(false)
 const hasData = computed(() => history.value.length > 0)
 const showLocPicker = ref(false); const showPlayerPicker = ref(false)
@@ -113,6 +114,7 @@ function openConfirm() {
   confirmDate.value = new Date().toISOString().slice(0,10)
   confirmDuration.value = String(trainElapsed.value || 60)
   confirmLoc.value = ''; confirmPartner.value = ''; confirmNotes.value = ''; confirmAmount.value = ''
+  goalValues.value = {}
   const src = (hasData.value && history.value[0]?.indicators && Object.keys(history.value[0].indicators).length>0) ? history.value[0].indicators : defaults(skillId)
   confirmIndicators.value = JSON.parse(JSON.stringify(src))
   showConfirm.value = true
@@ -125,7 +127,7 @@ async function saveRecord() {
     const body = { skill_id: skillId, date: confirmDate.value, duration_minutes: parseInt(confirmDuration.value)||60,
       location: confirmLoc.value, partner: confirmPartner.value, notes: confirmNotes.value,
       practice_amount: confirmAmount.value, skill_notes: '', energy_rating: 0, feel_rating: 0,
-      indicators: confirmIndicators.value, goal_values: {} }
+      indicators: confirmIndicators.value, goal_values: goalValues.value }
     const r = await fetch('/api/skill-train', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
     loadingToast.close()
     if (!r.ok) { showToast(await r.text() || '保存失败'); return }
@@ -356,7 +358,23 @@ function formatTime(s: number) { const h=Math.floor(s/3600); const m=Math.floor(
               <button @click="showPlayerPicker=true" style="width:100%;padding:11px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;text-align:left;background:#fff;cursor:pointer;outline:none;box-sizing:border-box;" :style="{color:confirmPartner?'#333':'#999'}">{{ confirmPartner || '点击选择球员' }}</button>
             </div>
           </div>
-          <div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">练习量</div><input v-model="confirmAmount" placeholder="例: 5组、200球" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;" /></div>
+          <!-- Goal quantities -->
+          <div v-if="skillGoals.length>0" style="margin-bottom:14px;">
+            <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:8px;">训练数量</div>
+            <div v-for="g in skillGoals" :key="g.id" style="margin-bottom:10px;background:#f8f9fa;border-radius:10px;padding:10px 12px;">
+              <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:6px;">{{ g.label }} ({{ g.unit }})</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+                <span v-for="v in [10,20,50,100,200,500]" :key="v" @click="goalValues[g.label]=(goalValues[g.label]||0)+v"
+                  style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:#e8f4ff;color:#1989fa;">+{{ v }}</span>
+                <span @click="goalValues[g.label]=Math.max(0,(goalValues[g.label]||0)-10)"
+                  style="padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;background:#fde8e8;color:#ee0a24;">-10</span>
+                <span @click="goalValues[g.label]=0"
+                  style="padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;background:#f0f0f0;color:#999;">清零</span>
+              </div>
+              <input v-model.number="goalValues[g.label]" type="number" :placeholder="'本次'+g.label"
+                style="width:100%;padding:8px 10px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;text-align:center;" />
+            </div>
+          </div>
           <div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px;">备注</div><textarea v-model="confirmNotes" placeholder="训练心得..." rows="2" style="width:100%;padding:12px;border:1px solid #e0e0e0;border-radius:10px;font-size:14px;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;"></textarea></div>
         </div>
       </div>

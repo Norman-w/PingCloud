@@ -108,6 +108,7 @@ func CreateSkillTraining(w http.ResponseWriter, r *http.Request) {
 		PracticeAmount  string                 `json:"practice_amount"`
 		SkillNotes      string                 `json:"skill_notes"`
 		Indicators      map[string]interface{} `json:"indicators"`
+		GoalValues      map[string]interface{} `json:"goal_values"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
@@ -145,11 +146,19 @@ func CreateSkillTraining(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Link skill with indicators
+	// Marshal goal values
+	goalValuesJSON := "{}"
+	if req.GoalValues != nil && len(req.GoalValues) > 0 {
+		if b, err := json.Marshal(req.GoalValues); err == nil {
+			goalValuesJSON = string(b)
+		}
+	}
+
+	// Link skill with indicators and goal values
 	_, err = db.DB.Exec(
-		`INSERT INTO training_log_skills (training_log_id, skill_id, practice_amount, notes, indicators)
-		 VALUES ($1,$2,$3,$4,$5::jsonb)`,
-		logID, req.SkillID, req.PracticeAmount, req.SkillNotes, indicatorsJSON)
+		`INSERT INTO training_log_skills (training_log_id, skill_id, practice_amount, notes, indicators, goal_values)
+		 VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb)`,
+		logID, req.SkillID, req.PracticeAmount, req.SkillNotes, indicatorsJSON, goalValuesJSON)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
