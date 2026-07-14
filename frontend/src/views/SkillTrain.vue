@@ -23,22 +23,37 @@ const skillName = ref(''); const skillCategory = ref(''); const skillStatus = re
 interface HistEntry { id: number; date: string; duration_minutes: number; location: string; partner: string; notes: string; practice_amount: string; skill_notes: string; indicators: Record<string,number>; created_at: string }
 const history = ref<HistEntry[]>([])
 const indicatorMode = ref<'current'|'max'|'avg'>('current')
+const defaultKeys = computed(() => Object.keys(defaults(skillId)))
+
 const currentIndicators = computed(() => {
-  if (history.value.length === 0) return defaults(skillId)
-  return history.value[0].indicators || defaults(skillId)
+  const base = {...defaults(skillId)}
+  if (history.value.length > 0 && history.value[0].indicators) {
+    for (const [k,v] of Object.entries(history.value[0].indicators)) { if (k in base) base[k]=v }
+  }
+  return base
 })
 const maxIndicators = computed(() => {
-  if (history.value.length === 0) return defaults(skillId)
-  const max: Record<string,number> = {}
-  for (const h of history.value) { for (const [k,v] of Object.entries(h.indicators||{})) { max[k] = Math.max(max[k]||0, v) } }
-  return Object.keys(max).length > 0 ? max : defaults(skillId)
+  const base = {...defaults(skillId)}
+  for (const h of history.value) {
+    for (const [k,v] of Object.entries(h.indicators||{})) {
+      if (k in base) base[k] = Math.max(base[k], v)
+    }
+  }
+  return base
 })
 const avgIndicators = computed(() => {
-  if (history.value.length === 0) return defaults(skillId)
+  const base = {...defaults(skillId)}
   const sum: Record<string,number> = {}; const cnt: Record<string,number> = {}
-  for (const h of history.value) { for (const [k,v] of Object.entries(h.indicators||{})) { sum[k] = (sum[k]||0) + v; cnt[k] = (cnt[k]||0) + 1 } }
-  const avg: Record<string,number> = {}; for (const k of Object.keys(sum)) { avg[k] = Math.round(sum[k] / cnt[k]) }
-  return Object.keys(avg).length > 0 ? avg : defaults(skillId)
+  for (const k of defaultKeys.value) { sum[k]=0; cnt[k]=0 }
+  for (const h of history.value) {
+    for (const [k,v] of Object.entries(h.indicators||{})) {
+      if (k in sum) { sum[k]+=v; cnt[k]++ }
+    }
+  }
+  for (const k of defaultKeys.value) {
+    if (cnt[k] > 0) base[k] = Math.round(sum[k]/cnt[k])
+  }
+  return base
 })
 const displayIndicators = computed(() => {
   if (indicatorMode.value === 'max') return maxIndicators.value
