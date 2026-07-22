@@ -147,11 +147,62 @@ async function viewTournament(id: number) {
   currentId.value = id
   await loadDetail(id)
   if (!detail.value) return
+  if (detail.value.status === 'registration') await loadPlayers()
   const s = detail.value.status
   const p = detail.value.phase
   if (s === 'registration') step.value = 'registration'
   else if (s === 'group_stage' || s === 'knockout') step.value = (p === 'completed' || s === 'completed') ? 'result' : 'play'
   else if (s === 'completed') step.value = 'result'
+}
+
+function requiredPlayers(): number {
+  if (!detail.value) return 0
+  // 每组至少 2 队才能循环；总人数须整除每队人数
+  return detail.value.group_count * 2 * detail.value.players_per_team
+}
+
+function confirmedCount(): number {
+  if (!detail.value) return 0
+  return detail.value.registrations.filter(r => r.status === 'confirmed').length
+}
+
+function canDrawTeams(): boolean {
+  if (!detail.value) return false
+  const n = confirmedCount()
+  const ppt = detail.value.players_per_team
+  if (ppt <= 0 || n < requiredPlayers()) return false
+  return n % ppt === 0
+}
+
+function drawBlockReason(): string {
+  if (!detail.value) return ''
+  const n = confirmedCount()
+  const ppt = detail.value.players_per_team
+  const min = requiredPlayers()
+  if (n < min) return `至少需要 ${min} 人（每组≥2队）才能抽签（当前 ${n}/${min}）`
+  if (n % ppt !== 0) return `报名人数需为每队 ${ppt} 人的整数倍（当前 ${n} 人，差 ${ppt - (n % ppt)} 人凑整）`
+  return ''
+}
+
+function onDrawTeamsClick() {
+  const reason = drawBlockReason()
+  if (reason) {
+    showToast(reason)
+    return
+  }
+  drawTeams()
+}
+
+function drawPreviewHint(): string {
+  if (!detail.value || !canDrawTeams()) return ''
+  const n = confirmedCount()
+  const ppt = detail.value.players_per_team
+  const gc = detail.value.group_count
+  const totalTeams = n / ppt
+  const base = Math.floor(totalTeams / gc)
+  const extra = totalTeams % gc
+  if (extra === 0) return `将组成 ${totalTeams} 队，均分到 ${gc} 组（每组 ${base} 队）`
+  return `将组成 ${totalTeams} 队，随机分配到 ${gc} 组（${base} 队 / ${base + 1} 队）`
 }
 
 function backToList() { step.value = 'list'; detail.value = null }
@@ -227,7 +278,7 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
             style="width: 100%; padding: 12px; border: 2px solid #1989fa; border-radius: 10px; font-size: 20px; font-weight: 700; text-align: center; outline: none; box-sizing: border-box;" />
         </div>
         <div style="flex: 1;">
-          <label style="font-size: 13px; font-weight: 600; color: #646566; display: block; margin-bottom: 4px;">每组队数</label>
+          <label style="font-size: 13px; font-weight: 600; color: #646566; display: block; margin-bottom: 4px;">参考队数/组</label>
           <input v-model.number="cfg.teams_per_group" type="number" min="2" max="8"
             style="width: 100%; padding: 12px; border: 2px solid #ebedf0; border-radius: 10px; font-size: 20px; font-weight: 700; text-align: center; outline: none; box-sizing: border-box;" />
         </div>
@@ -242,7 +293,7 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
         <label style="font-size: 13px; font-weight: 600; color: #646566; display: block; margin-bottom: 4px;">报名上限</label>
         <input v-model.number="cfg.max_participants" type="number" min="1"
           style="width: 100%; padding: 12px; border: 1.5px solid #ebedf0; border-radius: 10px; font-size: 15px; outline: none; box-sizing: border-box;" />
-        <div style="font-size: 11px; color: #969799; margin-top: 2px;">总人数 = {{ cfg.group_count }}组 × {{ cfg.teams_per_group }}队 × {{ cfg.players_per_team }}人 = {{ cfg.group_count * cfg.teams_per_group * cfg.players_per_team }}人</div>
+        <div style="font-size: 11px; color: #969799; margin-top: 2px;">参考总人数 = {{ cfg.group_count }}组 × {{ cfg.teams_per_group }}队 × {{ cfg.players_per_team }}人 = {{ cfg.group_count * cfg.teams_per_group * cfg.players_per_team }}人；抽签时按实际报名人数组队，组间队数可不均（如 3队+4队）</div>
       </div>
 
       <div style="margin-bottom: 14px;">
@@ -328,9 +379,20 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
     </div>
 
     <!-- Actions -->
-    <div style="padding: 16px; display: flex; gap: 10px;">
-      <button @click="drawTeams" :disabled="detail.registrations.filter(r => r.status === 'confirmed').length < detail.group_count * detail.teams_per_group * detail.players_per_team"
-        style="flex: 1; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #f5a623, #e8961a); color: #fff;">🎲 抽签组队</button>
+    <div style="padding: 16px;">
+      <div v-if="!canDrawTeams()" style="font-size: 13px; color: #ed6a0c; margin-bottom: 8px; text-align: center;">
+        {{ drawBlockReason() }}
+      </div>
+      <div v-else style="font-size: 13px; color: #07c160; margin-bottom: 8px; text-align: center;">
+        {{ drawPreviewHint() }}
+      </div>
+      <button @click="onDrawTeamsClick"
+        :style="{
+          width: '100%', padding: '16px', border: 'none', borderRadius: '14px', fontSize: '16px', fontWeight: 700,
+          cursor: canDrawTeams() ? 'pointer' : 'not-allowed',
+          background: canDrawTeams() ? 'linear-gradient(135deg, #f5a623, #e8961a)' : '#c8c9cc',
+          color: '#fff', opacity: canDrawTeams() ? 1 : 0.7
+        }">🎲 抽签组队</button>
     </div>
   </div>
 

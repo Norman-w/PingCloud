@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -653,12 +654,12 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	var groupCount, teamsPerGroup, playersPerTeam, seedCount int
+	var groupCount, playersPerTeam, seedCount int
 	var seedEnabled bool
 	err = tx.QueryRow(
-		`SELECT group_count, teams_per_group, players_per_team, seed_enabled, seed_count
+		`SELECT group_count, players_per_team, seed_enabled, seed_count
 		FROM tournaments WHERE id=$1 AND deleted=false`, tournamentID,
-	).Scan(&groupCount, &teamsPerGroup, &playersPerTeam, &seedEnabled, &seedCount)
+	).Scan(&groupCount, &playersPerTeam, &seedEnabled, &seedCount)
 	if err != nil {
 		http.Error(w, "tournament not found", http.StatusNotFound)
 		return
@@ -695,12 +696,30 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 		players = append(players, p)
 	}
 
-	totalTeams := groupCount * teamsPerGroup
-	totalSlots := totalTeams * playersPerTeam
-
-	if len(players) < totalSlots {
-		http.Error(w, "报名人数不足", http.StatusBadRequest)
+	totalTeams := len(players) / playersPerTeam
+	if len(players)%playersPerTeam != 0 {
+		http.Error(w, fmt.Sprintf("报名人数需为每队人数的整数倍（当前 %d 人，每队 %d 人）", len(players), playersPerTeam), http.StatusBadRequest)
 		return
+	}
+	minTeams := groupCount * 2 // 每组至少 2 队才能循环赛
+	if totalTeams < minTeams {
+		need := minTeams * playersPerTeam
+		http.Error(w, fmt.Sprintf("队伍数不足：至少需要 %d 人组成 %d 组（当前可组成 %d 队）", need, groupCount, totalTeams), http.StatusBadRequest)
+		return
+	}
+
+	// 组间队数尽量均分；有余数时随机决定哪几组多 1 队（例如 7 队 → 3+4）
+	groupSizes := make([]int, groupCount)
+	base := totalTeams / groupCount
+	extra := totalTeams % groupCount
+	for i := 0; i < groupCount; i++ {
+		groupSizes[i] = base
+	}
+	if extra > 0 {
+		order := rand.Perm(groupCount)
+		for i := 0; i < extra; i++ {
+			groupSizes[order[i]]++
+		}
 	}
 
 	// Create teams
@@ -708,7 +727,7 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 	groupLetters := "ABCDEFGH"
 	for g := 0; g < groupCount; g++ {
 		groupName := string(groupLetters[g])
-		for t := 0; t < teamsPerGroup; t++ {
+		for t := 0; t < groupSizes[g]; t++ {
 			teamName := groupName + strconv.Itoa(t+1)
 			var tid int
 			tx.QueryRow(
@@ -719,7 +738,10 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	roles := []string{"A", "B", "C"}
+	roles := make([]string, playersPerTeam)
+	for i := 0; i < playersPerTeam; i++ {
+		roles[i] = string(rune('A' + i))
+	}
 
 	seeds := []playerInfo{}
 	remaining := players
