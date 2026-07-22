@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { IconHome, IconUserPlus, IconConfetti, IconLogin, IconSwords, IconUser } from '@tabler/icons-vue'
+import { IconHome, IconUserPlus, IconConfetti, IconLogin, IconSwords, IconUser, IconTrophy } from '@tabler/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -146,6 +146,7 @@ const tabs = [
   { name: 'Home', label: '排位', component: IconHome },
   { name: 'TeamBattle', label: '团体赛', component: IconSwords },
   { name: 'FunMatch', label: '趣味赛', component: IconConfetti },
+  { name: 'Tournament', label: '锦标赛', component: IconTrophy },
   { name: 'AddPlayer', label: '球员', component: IconUserPlus },
   { name: 'Me', label: '我的', component: IconUser },
 ]

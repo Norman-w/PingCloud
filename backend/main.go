@@ -410,6 +410,42 @@ func main() {
 		}
 	})
 
+	// Tournament routes
+	mux.HandleFunc("/api/tournaments/", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		path := strings.TrimPrefix(r.URL.Path, "/api/tournaments/")
+		switch r.Method {
+		case http.MethodPost:
+			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/draw-card") { handlers.DrawTeamCard(w, r); return }
+			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/forfeit") { handlers.ForfeitTournamentMatch(w, r); return }
+			if strings.Contains(path, "/matches/") { handlers.ScoreTournamentMatch(w, r); return }
+			if path == "complete" || strings.HasSuffix(path, "/complete") { handlers.CompleteTournament(w, r); return }
+			if strings.Contains(path, "/draw-teams") { handlers.DrawTeams(w, r); return }
+			if strings.Contains(path, "/generate-group") { handlers.GenerateGroupMatches(w, r); return }
+			if strings.Contains(path, "/advance-knockout") { handlers.AdvanceToKnockout(w, r); return }
+			if strings.Contains(path, "/register") { handlers.RegisterForTournament(w, r); return }
+			if strings.Contains(path, "/cancel") { handlers.CancelRegistration(w, r); return }
+			handlers.CreateTournament(w, r)
+		case http.MethodPut: handlers.UpdateTournament(w, r)
+		case http.MethodDelete: handlers.DeleteTournament(w, r)
+		case http.MethodGet:
+			if strings.Contains(path, "/registrations") { handlers.ListRegistrations(w, r); return }
+			if path == "" { handlers.ListTournaments(w, r); return }
+			handlers.GetTournament(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/tournaments", func(w http.ResponseWriter, r *http.Request) {
+		cors(w)
+		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
+		switch r.Method {
+		case http.MethodGet: handlers.ListTournaments(w, r)
+		case http.MethodPost: handlers.CreateTournament(w, r)
+		default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Auth routes
 	mux.HandleFunc("/api/auth/send-code", func(w http.ResponseWriter, r *http.Request) {
 		cors(w)
@@ -585,13 +621,38 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Wrap mux with access logging
+	// Serve frontend static files (SPA fallback)
+	// Find frontend/dist relative to binary or current directory
+	distDir := "frontend/dist"
+	if _, err := os.Stat(distDir); os.IsNotExist(err) {
+		distDir = "../frontend/dist"
+	}
+	if _, err := os.Stat(distDir); os.IsNotExist(err) {
+		// Try relative to the source directory
+		distDir = "/usr/local/ClaudeProjects/PingCloud/frontend/dist"
+	}
+
+	// Wrap mux with access logging and SPA fallback
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip OPTIONS and static file requests
 		if r.Method != http.MethodOptions && !strings.HasPrefix(r.URL.Path, "/assets/") && r.URL.Path != "/favicon.svg" && r.URL.Path != "/icons.svg" {
 			go logAccess(r)
 		}
-		mux.ServeHTTP(w, r)
+
+		// API routes: serve via mux
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			mux.ServeHTTP(w, r)
+			return
+		}
+
+		// SPA fallback: try static file, otherwise serve index.html
+		filePath := filepath.Join(distDir, r.URL.Path)
+		if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			http.ServeFile(w, r, filePath)
+			return
+		}
+		// SPA fallback: serve index.html for client-side routing
+		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
 	})
 
 	port := ":8090"
