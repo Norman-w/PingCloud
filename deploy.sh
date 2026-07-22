@@ -26,10 +26,15 @@ echo ""
 
 # ── Step 0: Detect build location ──
 info "检测构建环境..."
-LOCAL_GO=$(go version 2>/dev/null | grep -oP 'go\K[0-9.]+' | head -1 || echo "0")
-REMOTE_GO=$(ssh $REMOTE "go version 2>/dev/null" | grep -oP 'go\K[0-9.]+' | head -1 || echo "0")
-LOCAL_NODE=$(node --version 2>/dev/null | grep -oP 'v\K[0-9]+' || echo "0")
-REMOTE_NODE=$(ssh $REMOTE "node --version 2>/dev/null" | grep -oP 'v\K[0-9]+' || echo "0")
+# macOS BSD grep 无 -P，用 sed 提取版本号
+LOCAL_GO=$(go version 2>/dev/null | sed -n 's/.*go\([0-9][0-9.]*\).*/\1/p' | head -1)
+LOCAL_GO=${LOCAL_GO:-0}
+REMOTE_GO=$(ssh $REMOTE "go version 2>/dev/null" | sed -n 's/.*go\([0-9][0-9.]*\).*/\1/p' | head -1)
+REMOTE_GO=${REMOTE_GO:-0}
+LOCAL_NODE=$(node --version 2>/dev/null | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')
+LOCAL_NODE=${LOCAL_NODE:-0}
+REMOTE_NODE=$(ssh $REMOTE "node --version 2>/dev/null" | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')
+REMOTE_NODE=${REMOTE_NODE:-0}
 
 BUILD_LOCAL=false
 if [ "$LOCAL_GO" != "0" ] && [ "$LOCAL_NODE" != "0" ]; then
@@ -85,14 +90,20 @@ fi
 # ── Step 4: Build ──
 if $BUILD_LOCAL; then
   # ── Local build ──
-  info "本地编译后端..."
+  info "本地交叉编译后端 (linux/amd64)..."
   cd "$LOCAL_DIR/backend"
-  GOPROXY=https://goproxy.cn,direct go build -o pingpong-server . 2>&1
+  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct \
+    go build -buildvcs=false -o pingpong-server . 2>&1
   ok "后端编译完成"
 
   info "本地构建前端..."
   cd "$LOCAL_DIR/frontend"
-  npm run build 2>&1 | tail -3
+  npm install 2>&1 | tail -5
+  npm run build 2>&1 | tee /tmp/pingcloud_frontend_build.log | tail -8
+  if [ ! -f dist/index.html ]; then
+    err "前端构建失败，详见 /tmp/pingcloud_frontend_build.log"
+    exit 1
+  fi
   ok "前端构建完成"
 
   # Upload binaries (stop service first to allow overwrite)
@@ -104,7 +115,7 @@ if $BUILD_LOCAL; then
 else
   # ── Remote build ──
   info "远程编译后端..."
-  ssh $REMOTE "cd $PROJECT_DIR/backend && GOPROXY=https://goproxy.cn,direct go build -o pingpong-server . 2>&1"
+  ssh $REMOTE "cd $PROJECT_DIR/backend && GOPROXY=https://goproxy.cn,direct go build -buildvcs=false -o pingpong-server . 2>&1"
   ok "后端编译完成"
 
   info "远程构建前端..."
