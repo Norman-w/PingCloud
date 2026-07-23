@@ -61,16 +61,18 @@ interface Match {
 interface Card { id: number; team_match_id: number; team_id: number; card_type: string; drawn_at: string }
 
 // ── state ──
-const step = ref<'list' | 'config' | 'registration' | 'draw' | 'play' | 'result'>('list')
+const step = ref<'list' | 'config' | 'registration' | 'draw' | 'play' | 'result' | 'review'>('list')
 const tournaments = ref<TournamentSummary[]>([])
 const detail = ref<TournamentDetail | null>(null)
 const allPlayers = ref<{ id: number; name: string; current_rating: number }[]>([])
 const loading = ref(false)
 const currentId = ref(0)
 const viewingTeamMatch = ref<TeamMatch | null>(null)
+const reviewSection = ref<'group' | 'knockout'>('group')
+const isReadonly = ref(false)
 
 // ── config form ──
-const cfg = ref({ name: '锦标赛', group_count: 2, teams_per_group: 3, players_per_team: 3, max_participants: 18, seed_enabled: false, seed_count: 0, registration_deadline: '' })
+const cfg = ref({ name: '混合团体赛', group_count: 2, teams_per_group: 3, players_per_team: 3, max_participants: 18, seed_enabled: false, seed_count: 0, registration_deadline: '' })
 
 // ── load ──
 async function loadList() {
@@ -85,6 +87,10 @@ async function loadDetail(id: number) {
   loading.value = true
   try { detail.value = await fetch(`/api/tournaments/${id}`).then(r => r.json()) } catch { detail.value = null }
   loading.value = false
+  if (detail.value && (detail.value.status === 'completed' || detail.value.phase === 'completed') && step.value === 'play') {
+    isReadonly.value = false
+    step.value = 'result'
+  }
 }
 
 // ── actions ──
@@ -207,7 +213,23 @@ function drawPreviewHint(): string {
   return `将组成 ${totalTeams} 队，随机分配到 ${gc} 组（${base} 队 / ${base + 1} 队）`
 }
 
-function backToList() { step.value = 'list'; detail.value = null }
+function backToList() {
+  step.value = 'list'
+  detail.value = null
+  isReadonly.value = false
+  reviewSection.value = 'group'
+}
+
+function openReview(section: 'group' | 'knockout') {
+  reviewSection.value = section
+  isReadonly.value = true
+  step.value = 'review'
+}
+
+function backToResult() {
+  isReadonly.value = false
+  step.value = 'result'
+}
 
 onMounted(() => { loadList() })
 
@@ -220,20 +242,26 @@ function finalStandings() {
   const final = detail.value.team_matches.find(m => m.phase === 'final' && m.played && m.winner_team_id)
   const third = detail.value.team_matches.find(m => m.phase === 'third_place' && m.played && m.winner_team_id)
   const byId = (id: number) => detail.value!.teams.find(t => t.id === id)
-  const rows: { rank: number; name: string; note: string }[] = []
+  const rows: { rank: number; name: string; note: string; players: { role: string; name: string; is_seed: boolean }[] }[] = []
+  const pushRow = (rank: number, teamId: number, note: string) => {
+    const team = byId(teamId)
+    if (!team) return
+    rows.push({
+      rank,
+      name: team.team_name,
+      note,
+      players: (team.players || []).map(p => ({ role: p.role, name: p.name, is_seed: p.is_seed })),
+    })
+  }
   if (final?.winner_team_id) {
-    const winner = byId(final.winner_team_id)
     const loserId = final.winner_team_id === final.team_a_id ? final.team_b_id : final.team_a_id
-    const loser = byId(loserId)
-    if (winner) rows.push({ rank: 1, name: winner.team_name, note: '决赛胜' })
-    if (loser) rows.push({ rank: 2, name: loser.team_name, note: '决赛负' })
+    pushRow(1, final.winner_team_id, '决赛胜')
+    pushRow(2, loserId, '决赛负')
   }
   if (third?.winner_team_id) {
-    const winner = byId(third.winner_team_id)
     const loserId = third.winner_team_id === third.team_a_id ? third.team_b_id : third.team_a_id
-    const loser = byId(loserId)
-    if (winner) rows.push({ rank: 3, name: winner.team_name, note: '三四名胜' })
-    if (loser) rows.push({ rank: 4, name: loser.team_name, note: '三四名负' })
+    pushRow(3, third.winner_team_id, '三四名胜')
+    pushRow(4, loserId, '三四名负')
   }
   return rows
 }
@@ -244,20 +272,20 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
   <!-- ===== LIST ===== -->
   <div v-if="step === 'list'">
     <div style="background: linear-gradient(135deg, #1a56db 0%, #1e88e5 50%, #00bfa5 100%); color: #fff; padding: 28px 20px 24px;">
-      <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 4px;">🏆 锦标赛</h2>
+      <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 4px;">🏆 混合团体赛</h2>
       <p style="font-size: 13px; opacity: 0.85; margin: 0;">小组循环 + 半决赛/决赛 · 五场三胜制团体赛</p>
     </div>
 
     <div style="padding: 16px;">
       <button @click="step = 'config'"
         style="width: 100%; padding: 16px; background: linear-gradient(135deg, #1989fa, #1e88e5); color: #fff; border: none; border-radius: 16px; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(25,137,250,0.3);">
-        ＋ 创建锦标赛
+        ＋ 创建混合团体赛
       </button>
     </div>
 
     <div v-if="tournaments.length === 0" style="text-align: center; padding: 60px 20px; color: #969799;">
       <div style="font-size: 48px; margin-bottom: 12px;">🏓</div>
-      <div style="font-size: 15px;">暂无锦标赛记录</div>
+      <div style="font-size: 15px;">暂无混合团体赛记录</div>
     </div>
 
     <div v-for="t in tournaments" :key="t.id" class="card" style="cursor: pointer;" @click="viewTournament(t.id)">
@@ -286,7 +314,7 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
     <div style="background: linear-gradient(135deg, #1a56db 0%, #1e88e5 50%, #00bfa5 100%); color: #fff; padding: 20px;">
       <div style="display: flex; align-items: center; gap: 12px;">
         <button @click="step = 'list'" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0;">←</button>
-        <h2 style="font-size: 18px; font-weight: 700; margin: 0;">创建锦标赛</h2>
+        <h2 style="font-size: 18px; font-weight: 700; margin: 0;">创建混合团体赛</h2>
       </div>
     </div>
 
@@ -466,19 +494,44 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
     </div>
 
     <!-- Group stage -->
-    <TournamentGroupView v-if="detail.phase === 'group'" :detail="detail" :tournament-id="currentId" @refresh="loadDetail(currentId)" @back="backToList" />
+    <TournamentGroupView v-if="detail.phase === 'group'" :detail="detail" :tournament-id="currentId" :readonly="isReadonly" @refresh="loadDetail(currentId)" @back="backToList" />
 
     <!-- Knockout / finals -->
-    <TournamentKnockout v-if="detail.phase === 'semifinal' || detail.phase === 'final' || detail.phase === 'third_place'" :detail="detail" :tournament-id="currentId" @refresh="loadDetail(currentId)" @back="backToList" />
+    <TournamentKnockout v-if="detail.phase === 'semifinal' || detail.phase === 'final' || detail.phase === 'third_place'" :detail="detail" :tournament-id="currentId" :readonly="isReadonly" @refresh="loadDetail(currentId)" @back="backToList" />
 
     <!-- Admin advance button -->
     <div style="padding: 16px;">
-      <button v-if="detail.phase === 'group' && detail.team_matches.filter(m => m.phase === 'group').every(m => m.played)"
+      <button v-if="!isReadonly && detail.phase === 'group' && detail.team_matches.filter(m => m.phase === 'group').every(m => m.played)"
         @click="advanceKnockout"
         style="width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #f5a623, #e8961a); color: #fff;">
         🏆 晋级半决赛
       </button>
     </div>
+  </div>
+
+  <!-- ===== REVIEW (完成后复盘) ===== -->
+  <div v-if="step === 'review' && detail">
+    <div style="background: linear-gradient(135deg, #1a56db 0%, #1e88e5 50%, #00bfa5 100%); color: #fff; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button @click="backToResult" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0;">←</button>
+        <div>
+          <div style="font-size: 16px; font-weight: 700;">{{ detail.name }} · 全程复盘</div>
+          <div style="font-size: 12px; opacity: 0.85;">只读查看，不可改分</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button @click="reviewSection = 'group'"
+          :style="{ flex: 1, padding: '8px', borderRadius: '10px', border: 'none', fontWeight: 700, fontSize: '13px', cursor: 'pointer', background: reviewSection === 'group' ? '#fff' : 'rgba(255,255,255,0.2)', color: reviewSection === 'group' ? '#1a56db' : '#fff' }">
+          小组赛
+        </button>
+        <button @click="reviewSection = 'knockout'"
+          :style="{ flex: 1, padding: '8px', borderRadius: '10px', border: 'none', fontWeight: 700, fontSize: '13px', cursor: 'pointer', background: reviewSection === 'knockout' ? '#fff' : 'rgba(255,255,255,0.2)', color: reviewSection === 'knockout' ? '#1a56db' : '#fff' }">
+          半决赛 / 决赛
+        </button>
+      </div>
+    </div>
+    <TournamentGroupView v-if="reviewSection === 'group'" :detail="detail" :tournament-id="currentId" :readonly="true" @refresh="loadDetail(currentId)" @back="backToResult" />
+    <TournamentKnockout v-if="reviewSection === 'knockout'" :detail="detail" :tournament-id="currentId" :readonly="true" @refresh="loadDetail(currentId)" @back="backToResult" />
   </div>
 
   <!-- ===== RESULT ===== -->
@@ -492,25 +545,51 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
     <!-- Final standings -->
     <div class="section-title">最终排名</div>
     <div v-if="finalStandings().length" v-for="row in finalStandings()" :key="row.rank" class="card" style="margin-bottom: 6px;">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 24px; font-weight: 800; color: #f5a623;">#{{ row.rank }}</span>
-        <div>
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="font-size: 24px; font-weight: 800; color: #f5a623; line-height: 1.2;">#{{ row.rank }}</span>
+        <div style="flex: 1;">
           <div style="font-weight: 700;">{{ row.name }}</div>
-          <div style="font-size: 12px; color: #969799;">{{ row.note }}</div>
+          <div style="font-size: 12px; color: #969799; margin-top: 2px;">{{ row.note }}</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+            <span v-for="p in row.players" :key="p.role + p.name"
+              :style="{
+                padding: '4px 10px', borderRadius: '14px', fontSize: '12px', fontWeight: 600,
+                background: p.is_seed ? '#fff3e0' : '#f0f2f5',
+                color: p.is_seed ? '#e65100' : '#333',
+                border: p.is_seed ? '1px solid #ffcc80' : '1px solid transparent',
+              }">
+              {{ p.role }}·{{ p.name }}
+              <span v-if="p.is_seed" style="font-size: 10px;">⭐</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
     <div v-else v-for="team of detail.teams.filter(t => t.group_rank).sort((a, b) => (a.group_rank || 99) - (b.group_rank || 99))" :key="team.id" class="card" style="margin-bottom: 6px;">
-      <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
         <span style="font-size: 24px; font-weight: 800; color: #f5a623;">#{{ team.group_rank }}</span>
-        <div>
+        <div style="flex: 1;">
           <div style="font-weight: 700;">{{ team.team_name }}</div>
           <div style="font-size: 12px; color: #969799;">{{ team.group_wins }}胜 {{ team.group_losses }}负</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+            <span v-for="p in team.players" :key="p.id"
+              style="padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 600; background: #f0f2f5; color: #333;">
+              {{ p.role }}·{{ p.name }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
 
-    <div style="padding: 16px;">
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+      <button @click="openReview('group')"
+        style="width: 100%; padding: 14px; border: 1.5px solid #1989fa; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; background: #fff; color: #1989fa;">
+        📺 复盘 · 小组赛
+      </button>
+      <button @click="openReview('knockout')"
+        style="width: 100%; padding: 14px; border: 1.5px solid #f5a623; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; background: #fff; color: #e8961a;">
+        📺 复盘 · 半决赛 / 决赛
+      </button>
       <button @click="backToList" style="width: 100%; padding: 14px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: #1989fa; color: #fff;">返回列表</button>
     </div>
   </div>

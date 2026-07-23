@@ -40,7 +40,7 @@ interface Detail {
 //#endregion
 
 //#region 私有成员
-const props = defineProps<{ detail: Detail; tournamentId: number }>()
+const props = defineProps<{ detail: Detail; tournamentId: number; readonly?: boolean }>()
 const emit = defineEmits<{ (e: 'refresh'): void; (e: 'back'): void }>()
 
 const showScore = ref(false)
@@ -371,7 +371,7 @@ async function confirmManualHint(groupName: string) {
 	<div v-for="(teams, groupName) in groupedTeams" :key="groupName" style="margin: 12px 16px;">
 		<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
 			<div style="font-weight: 700; font-size: 15px; color: #333;">{{ groupName }}组 积分榜</div>
-			<button v-if="groupNeedsManualRank(String(groupName))" @click="confirmManualHint(String(groupName))"
+			<button v-if="groupNeedsManualRank(String(groupName)) && !readonly" @click="confirmManualHint(String(groupName))"
 				style="padding: 4px 10px; border: 1px solid #ed6a0c; background: #fff7e8; color: #ed6a0c; border-radius: 12px; font-size: 11px; font-weight: 600; cursor: pointer;">
 				需手动排名
 			</button>
@@ -473,7 +473,7 @@ async function confirmManualHint(groupName: string) {
 			</div>
 
 			<div v-if="expandedTM === tm.id" style="border-top: 1px solid #f0f2f5;">
-				<div style="padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+				<div v-if="!readonly" style="padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
 					<button v-if="!tm.played" @click="openLineup(tm)"
 						style="padding: 8px 14px; background: #fff; border: 1.5px solid #1989fa; color: #1989fa; border-radius: 18px; font-size: 13px; font-weight: 700; cursor: pointer;">👥 配置出场 ABC</button>
 					<button v-if="tm.cards.length < 2 && !tm.played" @click="openCardDraw(tm)"
@@ -483,7 +483,7 @@ async function confirmManualHint(groupName: string) {
 					<button v-if="tm.played" @click="reopenTeamMatch(tm)"
 						style="padding: 8px 14px; background: #fff; border: 1.5px solid #ed6a0c; color: #ed6a0c; border-radius: 18px; font-size: 13px; font-weight: 700; cursor: pointer;">🔓 重新打开改分</button>
 				</div>
-				<div v-if="readyToComplete(tm)" style="text-align: center; font-size: 12px; color: #07c160; padding: 0 14px 8px;">
+				<div v-if="!readonly && readyToComplete(tm)" style="text-align: center; font-size: 12px; color: #07c160; padding: 0 14px 8px;">
 					已达 3 胜，请核对比分后点击「提交结束本场」计入积分榜
 				</div>
 
@@ -499,7 +499,7 @@ async function confirmManualHint(groupName: string) {
 						</div>
 						<div style="font-size: 11px; color: #969799;" v-if="m.played">{{ scoreStr(m) }} <span v-if="m.forfeit" style="color: #ff976a;">(弃权)</span></div>
 					</div>
-					<button v-if="!tm.played" @click="openScoreEditor(tm, m)"
+					<button v-if="!readonly && !tm.played" @click="openScoreEditor(tm, m)"
 						style="padding: 6px 12px; background: #1989fa; color: #fff; border: none; border-radius: 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
 						{{ m.played ? '改分' : '录入' }}
 					</button>

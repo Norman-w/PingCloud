@@ -37,7 +37,7 @@ interface Detail {
 //#endregion
 
 //#region 私有成员
-const props = defineProps<{ detail: Detail; tournamentId: number }>()
+const props = defineProps<{ detail: Detail; tournamentId: number; readonly?: boolean }>()
 const emit = defineEmits<{ (e: 'refresh'): void; (e: 'back'): void }>()
 
 const showScore = ref(false)
@@ -224,7 +224,7 @@ async function reopenTeamMatch(tm: TeamMatch) {
 
 async function completeTournament() {
 	try {
-		await showDialog({ title: '结束赛事', message: '决赛与三四名均已打完，确认结束本届锦标赛？' })
+		await showDialog({ title: '结束赛事', message: '决赛与三四名均已打完，确认结束本届混合团体赛？' })
 	} catch { return }
 	try {
 		const r = await fetch(`/api/tournaments/${props.tournamentId}/complete`, { method: 'POST' })
@@ -316,7 +316,7 @@ const canCompleteTournament = computed(() => {
 					{{ teamMatchScore(tm) }}
 				</div>
 
-				<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 10px;">
+				<div v-if="!readonly" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 10px;">
 					<button v-if="!tm.played" @click="openLineup(tm)"
 						style="padding: 8px 14px; background: #fff; border: 1.5px solid #1989fa; color: #1989fa; border-radius: 18px; font-size: 13px; font-weight: 700; cursor: pointer;">👥 配置出场 ABC</button>
 					<button v-if="tm.cards.length < 2 && !tm.played" @click="openCardDraw(tm)"
@@ -326,7 +326,7 @@ const canCompleteTournament = computed(() => {
 					<button v-if="tm.played" @click="reopenTeamMatch(tm)"
 						style="padding: 8px 14px; background: #fff; border: 1.5px solid #ed6a0c; color: #ed6a0c; border-radius: 18px; font-size: 13px; font-weight: 700; cursor: pointer;">🔓 重新打开改分</button>
 				</div>
-				<div v-if="readyToComplete(tm)" style="text-align: center; font-size: 12px; color: #07c160; margin-bottom: 8px;">
+				<div v-if="!readonly && readyToComplete(tm)" style="text-align: center; font-size: 12px; color: #07c160; margin-bottom: 8px;">
 					已达 3 胜，核对比分后提交结束
 				</div>
 
@@ -343,7 +343,7 @@ const canCompleteTournament = computed(() => {
 						<div style="font-size: 13px; font-weight: 500;">{{ playerLabel(m, 'a') }} vs {{ playerLabel(m, 'b') }}</div>
 						<div style="font-size: 11px; color: #969799;" v-if="m.played">{{ scoreStr(m) }}</div>
 					</div>
-					<button v-if="!tm.played" @click="openScoreEditor(m)"
+					<button v-if="!readonly && !tm.played" @click="openScoreEditor(m)"
 						style="padding: 6px 12px; background: #1989fa; color: #fff; border: none; border-radius: 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
 						{{ m.played ? '改分' : '录入' }}
 					</button>
@@ -352,10 +352,10 @@ const canCompleteTournament = computed(() => {
 			</div>
 		</div>
 
-		<div v-if="canCompleteTournament" style="margin-top: 16px;">
+		<div v-if="!readonly && canCompleteTournament" style="margin-top: 16px;">
 			<button @click="completeTournament"
 				style="width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #f5a623, #e8961a); color: #fff;">
-				🏁 结束锦标赛
+				🏁 结束混合团体赛
 			</button>
 		</div>
 	</div>
