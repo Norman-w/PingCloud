@@ -32,16 +32,20 @@ type TournamentSummary struct {
 }
 
 type TournamentTeam struct {
-	ID           int                   `json:"id"`
-	TournamentID int                   `json:"tournament_id"`
-	GroupName    string                `json:"group_name"`
-	TeamIndex    int                   `json:"team_index"`
-	TeamName     string                `json:"team_name"`
-	KnockoutSeed *int                  `json:"knockout_seed"`
-	GroupRank    *int                  `json:"group_rank"`
-	GroupWins    int                   `json:"group_wins"`
-	GroupLosses  int                   `json:"group_losses"`
-	GroupPoints  int                   `json:"group_points"`
+	ID           int                    `json:"id"`
+	TournamentID int                    `json:"tournament_id"`
+	GroupName    string                 `json:"group_name"`
+	TeamIndex    int                    `json:"team_index"`
+	TeamName     string                 `json:"team_name"`
+	KnockoutSeed *int                   `json:"knockout_seed"`
+	GroupRank    *int                   `json:"group_rank"`
+	GroupWins    int                    `json:"group_wins"`
+	GroupLosses  int                    `json:"group_losses"`
+	GroupPoints  int                    `json:"group_points"`
+	GamesWon     int                    `json:"games_won"`
+	GamesLost    int                    `json:"games_lost"`
+	PointsScored int                    `json:"points_scored"`
+	RankManual   bool                   `json:"rank_manual"`
 	Players      []TournamentTeamPlayer `json:"players"`
 }
 
@@ -265,6 +269,16 @@ func GetTournament(w http.ResponseWriter, r *http.Request) {
 	}
 	detail.CompletedAt = completedAt.String
 
+	// Backfill 决赛/三四名 if both semis already finished (upgrade path)
+	if detail.Phase == "semifinal" || detail.Phase == "final" {
+		if tx, err := db.DB.Begin(); err == nil {
+			setupFinalMatch(tx, tournamentID)
+			_ = tx.Commit()
+			// refresh phase after possible upgrade
+			db.DB.QueryRow(`SELECT phase FROM tournaments WHERE id=$1`, tournamentID).Scan(&detail.Phase)
+		}
+	}
+
 	// Load teams with players
 	detail.Teams = loadTournamentTeams(tournamentID)
 
@@ -280,7 +294,9 @@ func GetTournament(w http.ResponseWriter, r *http.Request) {
 func loadTournamentTeams(tournamentID int) []TournamentTeam {
 	rows, err := db.DB.Query(
 		`SELECT id, tournament_id, group_name, team_index, team_name,
-			knockout_seed, group_rank, group_wins, group_losses, group_points
+			knockout_seed, group_rank, group_wins, group_losses, group_points,
+			COALESCE(games_won, 0), COALESCE(games_lost, 0), COALESCE(points_scored, 0),
+			COALESCE(rank_manual, false)
 		FROM tournament_teams WHERE tournament_id=$1 ORDER BY group_name, team_index`, tournamentID)
 	if err != nil {
 		return []TournamentTeam{}
@@ -291,7 +307,8 @@ func loadTournamentTeams(tournamentID int) []TournamentTeam {
 	for rows.Next() {
 		var t TournamentTeam
 		rows.Scan(&t.ID, &t.TournamentID, &t.GroupName, &t.TeamIndex, &t.TeamName,
-			&t.KnockoutSeed, &t.GroupRank, &t.GroupWins, &t.GroupLosses, &t.GroupPoints)
+			&t.KnockoutSeed, &t.GroupRank, &t.GroupWins, &t.GroupLosses, &t.GroupPoints,
+			&t.GamesWon, &t.GamesLost, &t.PointsScored, &t.RankManual)
 		teams = append(teams, t)
 	}
 	if teams == nil {
@@ -351,7 +368,7 @@ func loadTournamentTeamMatches(tournamentID int) []TournamentTeamMatch {
 		`SELECT id, tournament_id, phase, round, COALESCE(group_name,''),
 			team_a_id, team_b_id, team_a_wins, team_b_wins, winner_team_id, played
 		FROM tournament_team_matches WHERE tournament_id=$1
-		ORDER BY CASE phase WHEN 'group' THEN 1 WHEN 'semifinal' THEN 2 WHEN 'final' THEN 3 END, round, id`, tournamentID)
+		ORDER BY CASE phase WHEN 'group' THEN 1 WHEN 'semifinal' THEN 2 WHEN 'final' THEN 3 WHEN 'third_place' THEN 4 ELSE 5 END, round, id`, tournamentID)
 	if err != nil {
 		return []TournamentTeamMatch{}
 	}
@@ -1069,10 +1086,20 @@ func ScoreTournamentMatch(w http.ResponseWriter, r *http.Request) {
 
 	var tournamentID, teamMatchID, teamAID, teamBID int
 	var wasPlayed bool
+	var tmPlayed bool
+	var tmPhase string
 	tx.QueryRow(
 		`SELECT tournament_id, team_match_id, team_a_id, team_b_id, played
 		FROM tournament_matches WHERE id=$1 FOR UPDATE`, matchID,
 	).Scan(&tournamentID, &teamMatchID, &teamAID, &teamBID, &wasPlayed)
+
+	tx.QueryRow(
+		`SELECT played, phase FROM tournament_team_matches WHERE id=$1 FOR UPDATE`, teamMatchID,
+	).Scan(&tmPlayed, &tmPhase)
+	if tmPlayed {
+		http.Error(w, "对阵已结束，请先「重新打开」后再改分", http.StatusBadRequest)
+		return
+	}
 
 	var winnerTeamID int
 	if aWins == 2 || (needsGame3 && *req.Game3ScoreA > *req.Game3ScoreB) {
@@ -1103,38 +1130,22 @@ func ScoreTournamentMatch(w http.ResponseWriter, r *http.Request) {
 		winnerTeamID, matchID,
 	)
 
-	// Update team match score
+	// Update team match score (do NOT auto-finalize — wait for manual complete)
 	updateTeamMatchScore(tx, teamMatchID, teamAID, teamBID)
 
-	// Check if team match is complete (first to 3 wins)
 	var tmAWins, tmBWins int
-	var tmWinnerID sql.NullInt64
-	var tmPhase string
 	tx.QueryRow(
-		`SELECT team_a_wins, team_b_wins, winner_team_id, phase FROM tournament_team_matches WHERE id=$1`,
+		`SELECT team_a_wins, team_b_wins FROM tournament_team_matches WHERE id=$1`,
 		teamMatchID,
-	).Scan(&tmAWins, &tmBWins, &tmWinnerID, &tmPhase)
+	).Scan(&tmAWins, &tmBWins)
 
-	if tmAWins >= 3 || tmBWins >= 3 {
-		winningTeam := teamAID
-		if tmBWins >= 3 {
-			winningTeam = teamBID
-		}
-		tx.Exec(`UPDATE tournament_team_matches SET winner_team_id=$1, played=true WHERE id=$2`, winningTeam, teamMatchID)
-
-		// Update group standings if group phase
-		if tmPhase == "group" {
-			tx.Exec(`UPDATE tournament_teams SET group_wins = group_wins + 1 WHERE id=$1`, winningTeam)
-			losingTeam := teamAID
-			if winningTeam == teamAID {
-				losingTeam = teamBID
-			}
-			tx.Exec(`UPDATE tournament_teams SET group_losses = group_losses + 1 WHERE id=$1`, losingTeam)
-		}
-
-		// If semifinal, set up final
-		if tmPhase == "semifinal" {
-			setupFinalMatch(tx, tournamentID)
+	// Live standings preview only from completed team matches; unfinished scores don't affect table
+	if tmPhase == "group" {
+		var groupName string
+		tx.QueryRow(`SELECT group_name FROM tournament_team_matches WHERE id=$1`, teamMatchID).Scan(&groupName)
+		if err := recalcGroupStandings(tx, tournamentID, groupName); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -1148,6 +1159,7 @@ func ScoreTournamentMatch(w http.ResponseWriter, r *http.Request) {
 		"winner_team_id": winnerTeamID,
 		"team_a_wins":    tmAWins,
 		"team_b_wins":    tmBWins,
+		"ready_to_complete": tmAWins >= 3 || tmBWins >= 3,
 	})
 }
 
@@ -1174,35 +1186,70 @@ func setupFinalMatch(tx *sql.Tx, tournamentID int) {
 		FROM tournament_team_matches WHERE tournament_id=$1 AND phase='semifinal'`, tournamentID,
 	).Scan(&sfCount, &sfComplete)
 
-	if sfComplete < sfCount {
+	if sfCount < 2 || sfComplete < sfCount {
 		return
 	}
 
-	// Get semifinal winners
-	var sf1Winner, sf2Winner int
-	tx.QueryRow(
-		`SELECT winner_team_id FROM tournament_team_matches WHERE tournament_id=$1 AND phase='semifinal' ORDER BY id LIMIT 1`,
+	type sfRow struct {
+		TeamAID, TeamBID, WinnerID int
+	}
+	rows, err := tx.Query(
+		`SELECT team_a_id, team_b_id, COALESCE(winner_team_id, 0)
+		FROM tournament_team_matches WHERE tournament_id=$1 AND phase='semifinal' ORDER BY id`,
 		tournamentID,
-	).Scan(&sf1Winner)
-	tx.QueryRow(
-		`SELECT winner_team_id FROM tournament_team_matches WHERE tournament_id=$1 AND phase='semifinal' ORDER BY id OFFSET 1 LIMIT 1`,
-		tournamentID,
-	).Scan(&sf2Winner)
+	)
+	if err != nil {
+		return
+	}
+	var sfs []sfRow
+	for rows.Next() {
+		var s sfRow
+		rows.Scan(&s.TeamAID, &s.TeamBID, &s.WinnerID)
+		sfs = append(sfs, s)
+	}
+	rows.Close()
+	if len(sfs) < 2 || sfs[0].WinnerID == 0 || sfs[1].WinnerID == 0 {
+		return
+	}
 
-	// Check if final already exists
+	w1, w2 := sfs[0].WinnerID, sfs[1].WinnerID
+	l1 := sfs[0].TeamBID
+	if sfs[0].WinnerID == sfs[0].TeamBID {
+		l1 = sfs[0].TeamAID
+	}
+	l2 := sfs[1].TeamBID
+	if sfs[1].WinnerID == sfs[1].TeamBID {
+		l2 = sfs[1].TeamAID
+	}
+
+	// 决赛：胜者决 1-2 名
 	var finalExists int
 	tx.QueryRow(
 		`SELECT COUNT(*) FROM tournament_team_matches WHERE tournament_id=$1 AND phase='final'`, tournamentID,
 	).Scan(&finalExists)
-
 	if finalExists == 0 {
 		var tmID int
 		tx.QueryRow(
 			`INSERT INTO tournament_team_matches (tournament_id, phase, round, team_a_id, team_b_id)
 			VALUES ($1, 'final', 1, $2, $3) RETURNING id`,
-			tournamentID, sf1Winner, sf2Winner,
+			tournamentID, w1, w2,
 		).Scan(&tmID)
-		createSubMatches(tx, tmID, tournamentID, "final", 1, "", sf1Winner, sf2Winner)
+		createSubMatches(tx, tmID, tournamentID, "final", 1, "", w1, w2)
+	}
+
+	// 三四名决赛：负者决 3-4 名
+	var thirdExists int
+	tx.QueryRow(
+		`SELECT COUNT(*) FROM tournament_team_matches WHERE tournament_id=$1 AND phase='third_place'`, tournamentID,
+	).Scan(&thirdExists)
+	if thirdExists == 0 {
+		var tmID int
+		tx.QueryRow(
+			`INSERT INTO tournament_team_matches (tournament_id, phase, round, team_a_id, team_b_id)
+			VALUES ($1, 'third_place', 1, $2, $3) RETURNING id`,
+			tournamentID, l1, l2,
+		).Scan(&tmID)
+		createSubMatches(tx, tmID, tournamentID, "third_place", 1, "", l1, l2)
 	}
 
 	tx.Exec(`UPDATE tournaments SET phase='final' WHERE id=$1`, tournamentID)
@@ -1234,48 +1281,40 @@ func ForfeitTournamentMatch(w http.ResponseWriter, r *http.Request) {
 
 	var tournamentID, teamMatchID, teamAID, teamBID int
 	var played bool
+	var tmPlayed bool
+	var tmPhase string
 	tx.QueryRow(
 		`SELECT tournament_id, team_match_id, team_a_id, team_b_id, played
 		FROM tournament_matches WHERE id=$1 FOR UPDATE`, matchID,
 	).Scan(&tournamentID, &teamMatchID, &teamAID, &teamBID, &played)
 
-	if played {
-		http.Error(w, "match already played", http.StatusBadRequest)
+	tx.QueryRow(
+		`SELECT played, phase FROM tournament_team_matches WHERE id=$1 FOR UPDATE`, teamMatchID,
+	).Scan(&tmPlayed, &tmPhase)
+	if tmPlayed {
+		http.Error(w, "对阵已结束，请先「重新打开」后再改分", http.StatusBadRequest)
 		return
 	}
 
 	tx.Exec(
-		`UPDATE tournament_matches SET game1_score_a=0, game1_score_b=0, game2_score_a=0, game2_score_b=0, winner_team_id=$1, played=true, forfeit=true WHERE id=$2`,
+		`UPDATE tournament_matches SET game1_score_a=0, game1_score_b=0, game2_score_a=0, game2_score_b=0, game3_score_a=NULL, game3_score_b=NULL, winner_team_id=$1, played=true, forfeit=true WHERE id=$2`,
 		req.WinnerTeamID, matchID,
 	)
 
 	updateTeamMatchScore(tx, teamMatchID, teamAID, teamBID)
 
-	// Check team match completion
 	var tmAWins, tmBWins int
-	var tmPhase string
 	tx.QueryRow(
-		`SELECT team_a_wins, team_b_wins, phase FROM tournament_team_matches WHERE id=$1`,
+		`SELECT team_a_wins, team_b_wins FROM tournament_team_matches WHERE id=$1`,
 		teamMatchID,
-	).Scan(&tmAWins, &tmBWins, &tmPhase)
+	).Scan(&tmAWins, &tmBWins)
 
-	if tmAWins >= 3 || tmBWins >= 3 {
-		winningTeam := teamAID
-		if tmBWins >= 3 {
-			winningTeam = teamBID
-		}
-		tx.Exec(`UPDATE tournament_team_matches SET winner_team_id=$1, played=true WHERE id=$2`, winningTeam, teamMatchID)
-
-		if tmPhase == "group" {
-			tx.Exec(`UPDATE tournament_teams SET group_wins = group_wins + 1 WHERE id=$1`, winningTeam)
-			losingTeam := teamAID
-			if winningTeam == teamAID {
-				losingTeam = teamBID
-			}
-			tx.Exec(`UPDATE tournament_teams SET group_losses = group_losses + 1 WHERE id=$1`, losingTeam)
-		}
-		if tmPhase == "semifinal" {
-			setupFinalMatch(tx, tournamentID)
+	if tmPhase == "group" {
+		var groupName string
+		tx.QueryRow(`SELECT group_name FROM tournament_team_matches WHERE id=$1`, teamMatchID).Scan(&groupName)
+		if err := recalcGroupStandings(tx, tournamentID, groupName); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -1284,7 +1323,10 @@ func ForfeitTournamentMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]string{"status": "ok"})
+	writeJSON(w, map[string]interface{}{
+		"status":            "ok",
+		"ready_to_complete": tmAWins >= 3 || tmBWins >= 3,
+	})
 }
 
 // --- Cards ---
@@ -1292,12 +1334,13 @@ func ForfeitTournamentMatch(w http.ResponseWriter, r *http.Request) {
 func DrawTeamCard(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/tournaments/")
 	parts := strings.Split(path, "/")
-	if len(parts) < 4 || parts[1] != "team-matches" || parts[2] != "draw-card" {
+	// expected: {id}/team-matches/{tmId}/draw-card
+	if len(parts) < 4 || parts[1] != "team-matches" || parts[3] != "draw-card" {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
 	tournamentID, _ := strconv.Atoi(parts[0])
-	teamMatchID, _ := strconv.Atoi(parts[1])
+	teamMatchID, _ := strconv.Atoi(parts[2])
 
 	var req struct {
 		TeamID int `json:"team_id"`
@@ -1318,16 +1361,30 @@ func DrawTeamCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate team match belongs to tournament
+	var tmCount int
+	db.DB.QueryRow(
+		`SELECT COUNT(*) FROM tournament_team_matches WHERE id=$1 AND tournament_id=$2`,
+		teamMatchID, tournamentID,
+	).Scan(&tmCount)
+	if tmCount == 0 {
+		http.Error(w, "对阵不存在", http.StatusNotFound)
+		return
+	}
+
 	// Random draw
 	card := tournamentCardTypes[rand.Intn(len(tournamentCardTypes))]
 
-	db.DB.Exec(
+	if _, err := db.DB.Exec(
 		`INSERT INTO tournament_cards (tournament_id, team_match_id, team_id, card_type) VALUES ($1, $2, $3, $4)`,
 		tournamentID, teamMatchID, req.TeamID, card.Type,
-	)
+	); err != nil {
+		http.Error(w, "抽卡失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	writeJSON(w, map[string]interface{}{
-		"card_type":  card.Type,
+		"card_type":   card.Type,
 		"card_detail": card.Detail,
 	})
 }
@@ -1360,49 +1417,53 @@ func AdvanceToKnockout(w http.ResponseWriter, r *http.Request) {
 	for g := 0; g < groupCount; g++ {
 		groupName := string(groupLetters[g])
 
+		if err := recalcGroupStandings(tx, tournamentID, groupName); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		rows, err := tx.Query(
-			`SELECT id, group_wins, group_losses FROM tournament_teams
+			`SELECT id, group_rank FROM tournament_teams
 			WHERE tournament_id=$1 AND group_name=$2
-			ORDER BY group_wins DESC, (group_wins - group_losses) DESC`, tournamentID, groupName)
+			ORDER BY COALESCE(group_rank, 99), group_points DESC, games_won DESC, points_scored DESC`, tournamentID, groupName)
 		if err != nil {
 			continue
 		}
 
 		var teams []struct {
-			ID    int
-			Wins  int
-			Losses int
+			ID   int
+			Rank sql.NullInt64
 		}
 		for rows.Next() {
 			var t struct {
-				ID    int
-				Wins  int
-				Losses int
+				ID   int
+				Rank sql.NullInt64
 			}
-			rows.Scan(&t.ID, &t.Wins, &t.Losses)
+			rows.Scan(&t.ID, &t.Rank)
 			teams = append(teams, t)
 		}
 		rows.Close()
 
-		// Update group ranks
-		for i, t := range teams {
-			rank := i + 1
-			tx.Exec(`UPDATE tournament_teams SET group_rank=$1 WHERE id=$2`, rank, t.ID)
+		for _, t := range teams {
+			if !t.Rank.Valid {
+				http.Error(w, groupName+"组存在无法自动判定的并列，请先手动设定名次", http.StatusBadRequest)
+				return
+			}
 		}
 
-		// Take top 2
+		// Take top 2 by rank
 		if len(teams) >= 2 {
-			groupTop2 = append(groupTop2, rankedTeam{teams[0].ID, 1}, rankedTeam{teams[1].ID, 2})
+			groupTop2 = append(groupTop2, rankedTeam{teams[0].ID, int(teams[0].Rank.Int64)}, rankedTeam{teams[1].ID, int(teams[1].Rank.Int64)})
 		}
 	}
 
 	if len(groupTop2) < 4 {
-		http.Error(w, "小组赛未完成，无法生成淘汰赛", http.StatusBadRequest)
+		http.Error(w, "小组赛未完成，无法生成半决赛", http.StatusBadRequest)
 		return
 	}
 
 	// Delete existing knockout matches if re-advancing (FK cascade handles sub-matches and cards)
-	tx.Exec(`DELETE FROM tournament_team_matches WHERE tournament_id=$1 AND phase IN ('semifinal','final')`, tournamentID)
+	tx.Exec(`DELETE FROM tournament_team_matches WHERE tournament_id=$1 AND phase IN ('semifinal','final','third_place')`, tournamentID)
 
 	// Cross semi-finals: A1 vs B2, B1 vs A2
 	a1 := groupTop2[0].TeamID // A组第1

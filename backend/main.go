@@ -418,8 +418,12 @@ func main() {
 		switch r.Method {
 		case http.MethodPost:
 			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/draw-card") { handlers.DrawTeamCard(w, r); return }
+			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/lineup") { handlers.SetTeamMatchLineup(w, r); return }
+			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/complete") { handlers.CompleteTeamMatch(w, r); return }
+			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/reopen") { handlers.ReopenTeamMatch(w, r); return }
 			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/forfeit") { handlers.ForfeitTournamentMatch(w, r); return }
 			if strings.Contains(path, "/matches/") { handlers.ScoreTournamentMatch(w, r); return }
+			if strings.Contains(path, "/set-ranks") { handlers.SetGroupRanks(w, r); return }
 			if path == "complete" || strings.HasSuffix(path, "/complete") { handlers.CompleteTournament(w, r); return }
 			if strings.Contains(path, "/draw-teams") { handlers.DrawTeams(w, r); return }
 			if strings.Contains(path, "/generate-group") { handlers.GenerateGroupMatches(w, r); return }

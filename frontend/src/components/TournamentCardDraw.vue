@@ -7,6 +7,7 @@ const props = defineProps<{
   teamBName: string
   drawing: boolean
   result: { card_type: string; card_detail: string } | null
+  failTick?: number
 }>()
 
 const emit = defineEmits<{
@@ -96,6 +97,17 @@ watch(() => props.result, (r) => {
         pendingIdx.value = idx
       }
     }
+  }
+})
+
+watch(() => props.failTick, () => {
+  if (spinning.value) {
+    if (spinTimer.value) clearTimeout(spinTimer.value)
+    if (checkTimer) clearInterval(checkTimer)
+    spinning.value = false
+    chosenIdx.value = -1
+    pendingIdx.value = -1
+    spinTimer.value = null
   }
 })
 

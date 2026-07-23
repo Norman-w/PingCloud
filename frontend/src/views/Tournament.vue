@@ -25,6 +25,7 @@ interface Team {
   id: number; tournament_id: number; group_name: string; team_index: number
   team_name: string; knockout_seed: number | null; group_rank: number | null
   group_wins: number; group_losses: number; group_points: number
+  games_won: number; games_lost: number; points_scored: number; rank_manual: boolean
   players: TeamPlayer[]
 }
 
@@ -151,7 +152,8 @@ async function viewTournament(id: number) {
   const s = detail.value.status
   const p = detail.value.phase
   if (s === 'registration') step.value = 'registration'
-  else if (s === 'group_stage' || s === 'knockout') step.value = (p === 'completed' || s === 'completed') ? 'result' : 'play'
+  else if (s === 'completed' || p === 'completed') step.value = 'result'
+  else if (p === 'group' || p === 'semifinal' || p === 'final' || p === 'third_place' || s === 'group_stage' || s === 'knockout') step.value = 'play'
   else if (s === 'completed') step.value = 'result'
 }
 
@@ -211,7 +213,30 @@ onMounted(() => { loadList() })
 
 // ── format helpers ──
 function fmtDate(s: string) { if (!s) return ''; return s.replace('T', ' ').substring(0, 16) }
-function phaseLabel(p: string) { const m: Record<string, string> = { registration: '报名中', group: '小组赛', semifinal: '半决赛', final: '决赛', completed: '已结束' }; return m[p] || p }
+function phaseLabel(p: string) { const m: Record<string, string> = { registration: '报名中', group: '小组赛', semifinal: '半决赛', final: '决赛', third_place: '三四名决赛', completed: '已结束' }; return m[p] || p }
+
+function finalStandings() {
+  if (!detail.value) return []
+  const final = detail.value.team_matches.find(m => m.phase === 'final' && m.played && m.winner_team_id)
+  const third = detail.value.team_matches.find(m => m.phase === 'third_place' && m.played && m.winner_team_id)
+  const byId = (id: number) => detail.value!.teams.find(t => t.id === id)
+  const rows: { rank: number; name: string; note: string }[] = []
+  if (final?.winner_team_id) {
+    const winner = byId(final.winner_team_id)
+    const loserId = final.winner_team_id === final.team_a_id ? final.team_b_id : final.team_a_id
+    const loser = byId(loserId)
+    if (winner) rows.push({ rank: 1, name: winner.team_name, note: '决赛胜' })
+    if (loser) rows.push({ rank: 2, name: loser.team_name, note: '决赛负' })
+  }
+  if (third?.winner_team_id) {
+    const winner = byId(third.winner_team_id)
+    const loserId = third.winner_team_id === third.team_a_id ? third.team_b_id : third.team_a_id
+    const loser = byId(loserId)
+    if (winner) rows.push({ rank: 3, name: winner.team_name, note: '三四名胜' })
+    if (loser) rows.push({ rank: 4, name: loser.team_name, note: '三四名负' })
+  }
+  return rows
+}
 function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' : t === 'net_deduction' ? '擦网扣分卡' : t }
 </script>
 
@@ -220,7 +245,7 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
   <div v-if="step === 'list'">
     <div style="background: linear-gradient(135deg, #1a56db 0%, #1e88e5 50%, #00bfa5 100%); color: #fff; padding: 28px 20px 24px;">
       <h2 style="font-size: 22px; font-weight: 800; margin: 0 0 4px;">🏆 锦标赛</h2>
-      <p style="font-size: 13px; opacity: 0.85; margin: 0;">小组循环 + 淘汰晋级 · 五场三胜制团体赛</p>
+      <p style="font-size: 13px; opacity: 0.85; margin: 0;">小组循环 + 半决赛/决赛 · 五场三胜制团体赛</p>
     </div>
 
     <div style="padding: 16px;">
@@ -443,15 +468,15 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
     <!-- Group stage -->
     <TournamentGroupView v-if="detail.phase === 'group'" :detail="detail" :tournament-id="currentId" @refresh="loadDetail(currentId)" @back="backToList" />
 
-    <!-- Knockout -->
-    <TournamentKnockout v-if="detail.phase === 'semifinal' || detail.phase === 'final'" :detail="detail" :tournament-id="currentId" @refresh="loadDetail(currentId)" @back="backToList" />
+    <!-- Knockout / finals -->
+    <TournamentKnockout v-if="detail.phase === 'semifinal' || detail.phase === 'final' || detail.phase === 'third_place'" :detail="detail" :tournament-id="currentId" @refresh="loadDetail(currentId)" @back="backToList" />
 
     <!-- Admin advance button -->
     <div style="padding: 16px;">
       <button v-if="detail.phase === 'group' && detail.team_matches.filter(m => m.phase === 'group').every(m => m.played)"
         @click="advanceKnockout"
         style="width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #f5a623, #e8961a); color: #fff;">
-        🏆 晋级淘汰赛
+        🏆 晋级半决赛
       </button>
     </div>
   </div>
@@ -466,7 +491,16 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
 
     <!-- Final standings -->
     <div class="section-title">最终排名</div>
-    <div v-for="team of detail.teams.filter(t => t.group_rank).sort((a, b) => (a.group_rank || 99) - (b.group_rank || 99))" :key="team.id" class="card" style="margin-bottom: 6px;">
+    <div v-if="finalStandings().length" v-for="row in finalStandings()" :key="row.rank" class="card" style="margin-bottom: 6px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 24px; font-weight: 800; color: #f5a623;">#{{ row.rank }}</span>
+        <div>
+          <div style="font-weight: 700;">{{ row.name }}</div>
+          <div style="font-size: 12px; color: #969799;">{{ row.note }}</div>
+        </div>
+      </div>
+    </div>
+    <div v-else v-for="team of detail.teams.filter(t => t.group_rank).sort((a, b) => (a.group_rank || 99) - (b.group_rank || 99))" :key="team.id" class="card" style="margin-bottom: 6px;">
       <div style="display: flex; align-items: center; gap: 10px;">
         <span style="font-size: 24px; font-weight: 800; color: #f5a623;">#{{ team.group_rank }}</span>
         <div>
