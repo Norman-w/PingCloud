@@ -173,10 +173,10 @@ func CreateTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Name == "" {
-		req.Name = "锦标赛"
+		req.Name = "混合团体赛"
 	}
 	if req.GroupCount < 1 {
-		req.GroupCount = 2
+		req.GroupCount = 1
 	}
 	if req.TeamsPerGroup < 2 {
 		req.TeamsPerGroup = 3
@@ -276,6 +276,17 @@ func GetTournament(w http.ResponseWriter, r *http.Request) {
 			_ = tx.Commit()
 			// refresh phase after possible upgrade
 			db.DB.QueryRow(`SELECT phase FROM tournaments WHERE id=$1`, tournamentID).Scan(&detail.Phase)
+		}
+	}
+
+	// 小组赛阶段每次打开刷新积分榜（含「已满3胜待提交」预览）
+	if detail.Phase == "group" || detail.Status == "group_stage" {
+		if tx, err := db.DB.Begin(); err == nil {
+			if err := recalcAllGroupStandings(tx, tournamentID); err != nil {
+				tx.Rollback()
+			} else {
+				_ = tx.Commit()
+			}
 		}
 	}
 
@@ -718,7 +729,11 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("报名人数需为每队人数的整数倍（当前 %d 人，每队 %d 人）", len(players), playersPerTeam), http.StatusBadRequest)
 		return
 	}
-	minTeams := groupCount * 2 // 每组至少 2 队才能循环赛
+	// 每组至少 2 队；单组模式也只需 ≥2 队即可循环
+	minTeams := 2
+	if groupCount > 1 {
+		minTeams = groupCount * 2
+	}
 	if totalTeams < minTeams {
 		need := minTeams * playersPerTeam
 		http.Error(w, fmt.Sprintf("队伍数不足：至少需要 %d 人组成 %d 组（当前可组成 %d 队）", need, groupCount, totalTeams), http.StatusBadRequest)
@@ -739,8 +754,9 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create teams
+	// Create teams (临时名，抽签后改为 组字母+种子姓名)
 	teamIDs := make([]int, 0, totalTeams)
+	teamGroup := make(map[int]string) // teamID -> group letter
 	groupLetters := "ABCDEFGH"
 	for g := 0; g < groupCount; g++ {
 		groupName := string(groupLetters[g])
@@ -752,6 +768,7 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 				tournamentID, groupName, t, teamName,
 			).Scan(&tid)
 			teamIDs = append(teamIDs, tid)
+			teamGroup[tid] = groupName
 		}
 	}
 
@@ -771,7 +788,6 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Assign seeds: snake draft across all teams
-	// Seed 1 -> team 0 (A1), Seed 2 -> team 1 (B1), Seed 3 -> team 2 (B2), Seed 4 -> team 3 (A2), etc.
 	seedAssignments := make(map[int]int) // playerID -> teamID
 	for i, seed := range seeds {
 		teamIdx := i % totalTeams
@@ -823,6 +839,23 @@ func DrawTeams(w http.ResponseWriter, r *http.Request) {
 		if !placed {
 			break
 		}
+	}
+
+	// 队名：组字母+种子姓名（无种子则取队内积分最高者），如 A+任鑫
+	for _, tid := range teamIDs {
+		var anchor string
+		tx.QueryRow(
+			`SELECT p.name FROM tournament_team_players ttp
+			JOIN players p ON p.id = ttp.player_id
+			WHERE ttp.team_id=$1
+			ORDER BY ttp.is_seed DESC, COALESCE(p.reference_rating, p.current_rating) DESC
+			LIMIT 1`, tid,
+		).Scan(&anchor)
+		if anchor == "" {
+			anchor = "队"
+		}
+		teamName := teamGroup[tid] + "+" + anchor
+		tx.Exec(`UPDATE tournament_teams SET team_name=$1 WHERE id=$2`, teamName, tid)
 	}
 
 	// Update tournament status
@@ -1122,7 +1155,7 @@ func ScoreTournamentMatch(w http.ResponseWriter, r *http.Request) {
 			game1_score_a=$1, game1_score_b=$2,
 			game2_score_a=$3, game2_score_b=$4,
 			game3_score_a=$5, game3_score_b=$6,
-			winner_team_id=$7, played=true
+			winner_team_id=$7, played=true, forfeit=false
 		WHERE id=$8`,
 		req.Game1ScoreA, req.Game1ScoreB,
 		req.Game2ScoreA, req.Game2ScoreB,
@@ -1256,21 +1289,19 @@ func setupFinalMatch(tx *sql.Tx, tournamentID int) {
 }
 
 func ForfeitTournamentMatch(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "混合团体赛单局不支持弃权，请直接录入比分", http.StatusBadRequest)
+}
+
+// ClearTournamentMatch resets a sub-match to unplayed (score cleared).
+func ClearTournamentMatch(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/tournaments/")
 	parts := strings.Split(path, "/")
-	if len(parts) < 4 || parts[1] != "matches" || parts[3] != "forfeit" {
+	// expected: {id}/matches/{matchId}/clear
+	if len(parts) < 4 || parts[1] != "matches" || parts[3] != "clear" {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
 	matchID, _ := strconv.Atoi(parts[2])
-
-	var req struct {
-		WinnerTeamID int `json:"winner_team_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -1280,26 +1311,37 @@ func ForfeitTournamentMatch(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var tournamentID, teamMatchID, teamAID, teamBID int
-	var played bool
 	var tmPlayed bool
 	var tmPhase string
-	tx.QueryRow(
-		`SELECT tournament_id, team_match_id, team_a_id, team_b_id, played
+	err = tx.QueryRow(
+		`SELECT tournament_id, team_match_id, team_a_id, team_b_id
 		FROM tournament_matches WHERE id=$1 FOR UPDATE`, matchID,
-	).Scan(&tournamentID, &teamMatchID, &teamAID, &teamBID, &played)
+	).Scan(&tournamentID, &teamMatchID, &teamAID, &teamBID)
+	if err != nil {
+		http.Error(w, "比赛不存在", http.StatusNotFound)
+		return
+	}
 
 	tx.QueryRow(
 		`SELECT played, phase FROM tournament_team_matches WHERE id=$1 FOR UPDATE`, teamMatchID,
 	).Scan(&tmPlayed, &tmPhase)
 	if tmPlayed {
-		http.Error(w, "对阵已结束，请先「重新打开」后再改分", http.StatusBadRequest)
+		http.Error(w, "对阵已结束，请先「重新打开」后再清除比分", http.StatusBadRequest)
 		return
 	}
 
-	tx.Exec(
-		`UPDATE tournament_matches SET game1_score_a=0, game1_score_b=0, game2_score_a=0, game2_score_b=0, game3_score_a=NULL, game3_score_b=NULL, winner_team_id=$1, played=true, forfeit=true WHERE id=$2`,
-		req.WinnerTeamID, matchID,
+	_, err = tx.Exec(
+		`UPDATE tournament_matches SET
+			game1_score_a=NULL, game1_score_b=NULL,
+			game2_score_a=NULL, game2_score_b=NULL,
+			game3_score_a=NULL, game3_score_b=NULL,
+			winner_id=NULL, winner_team_id=NULL, played=false, forfeit=false
+		WHERE id=$1`, matchID,
 	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	updateTeamMatchScore(tx, teamMatchID, teamAID, teamBID)
 
@@ -1324,8 +1366,9 @@ func ForfeitTournamentMatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]interface{}{
-		"status":            "ok",
-		"ready_to_complete": tmAWins >= 3 || tmBWins >= 3,
+		"status":         "ok",
+		"team_a_wins":    tmAWins,
+		"team_b_wins":    tmBWins,
 	})
 }
 
@@ -1404,6 +1447,10 @@ func AdvanceToKnockout(w http.ResponseWriter, r *http.Request) {
 
 	var groupCount int
 	tx.QueryRow(`SELECT group_count FROM tournaments WHERE id=$1`, tournamentID).Scan(&groupCount)
+	if groupCount < 2 {
+		http.Error(w, "单组循环赛无需晋级半决赛，请直接结束赛事公布排名", http.StatusBadRequest)
+		return
+	}
 
 	groupLetters := "ABCDEFGH"
 
@@ -1519,6 +1566,41 @@ func CompleteTournament(w http.ResponseWriter, r *http.Request) {
 	).Scan(&unplayed)
 	if unplayed > 0 {
 		http.Error(w, "还有未结束的比赛", http.StatusBadRequest)
+		return
+	}
+
+	// 单组循环赛：结束前再算一次积分榜，确保最终名次写入 group_rank
+	var groupCount int
+	db.DB.QueryRow(`SELECT group_count FROM tournaments WHERE id=$1`, tournamentID).Scan(&groupCount)
+	if groupCount == 1 {
+		tx, err := db.DB.Begin()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+		if err := recalcGroupStandings(tx, tournamentID, "A"); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var unresolved int
+		tx.QueryRow(
+			`SELECT COUNT(*) FROM tournament_teams
+			WHERE tournament_id=$1 AND group_rank IS NULL`, tournamentID,
+		).Scan(&unresolved)
+		if unresolved > 0 {
+			http.Error(w, "存在无法自动判定的并列，请先手动设定名次", http.StatusBadRequest)
+			return
+		}
+		tx.Exec(
+			`UPDATE tournaments SET status='completed', phase='completed', completed_at=NOW() WHERE id=$1`,
+			tournamentID,
+		)
+		if err := tx.Commit(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]string{"status": "ok"})
 		return
 	}
 

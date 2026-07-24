@@ -154,12 +154,13 @@ func recalcGroupStandings(tx *sql.Tx, tournamentID int, groupName string) error 
 	tmRows.Close()
 
 	for _, m := range teamMatches {
-		if !m.Played || m.WinnerTeamID == 0 {
+		winnerID := effectiveTeamMatchWinner(m)
+		if winnerID == 0 {
 			continue
 		}
-		winner := standings[m.WinnerTeamID]
+		winner := standings[winnerID]
 		loserID := m.TeamAID
-		if m.WinnerTeamID == m.TeamAID {
+		if winnerID == m.TeamAID {
 			loserID = m.TeamBID
 		}
 		loser := standings[loserID]
@@ -179,7 +180,8 @@ func recalcGroupStandings(tx *sql.Tx, tournamentID int, groupName string) error 
 		FROM tournament_matches m
 		JOIN tournament_team_matches tm ON tm.id = m.team_match_id
 		WHERE tm.tournament_id=$1 AND tm.group_name=$2 AND tm.phase='group'
-			AND tm.played=true AND m.played=true`,
+			AND m.played=true
+			AND (tm.played=true OR tm.team_a_wins >= 3 OR tm.team_b_wins >= 3)`,
 		tournamentID, groupName,
 	)
 	if err != nil {
@@ -267,6 +269,20 @@ func recalcAllGroupStandings(tx *sql.Tx, tournamentID int) error {
 }
 
 // ===== 分区：方法/工具 =====
+
+// effectiveTeamMatchWinner 正式提交，或已满 3 胜待提交时，都返回胜者队 ID（用于积分榜预览）。
+func effectiveTeamMatchWinner(m teamMatchResult) int {
+	if m.WinnerTeamID != 0 {
+		return m.WinnerTeamID
+	}
+	if m.TeamAWins >= 3 {
+		return m.TeamAID
+	}
+	if m.TeamBWins >= 3 {
+		return m.TeamBID
+	}
+	return 0
+}
 
 func applyGameScores(standings map[int]*teamStanding, teamAID, teamBID, scoreA, scoreB int) {
 	a := standings[teamAID]
@@ -444,11 +460,12 @@ func compareTeams(a, b *teamStanding, all map[int]*teamStanding, matches []teamM
 
 func headToHeadWinner(aID, bID int, matches []teamMatchResult) int {
 	for _, m := range matches {
-		if !m.Played || m.WinnerTeamID == 0 {
+		w := effectiveTeamMatchWinner(m)
+		if w == 0 {
 			continue
 		}
 		if (m.TeamAID == aID && m.TeamBID == bID) || (m.TeamAID == bID && m.TeamBID == aID) {
-			return m.WinnerTeamID
+			return w
 		}
 	}
 	return 0
@@ -470,7 +487,8 @@ func miniStats(teamID int, tiedIDs []int, matches []teamMatchResult, games []gam
 	}
 	var ms miniStanding
 	for _, m := range matches {
-		if !m.Played || m.WinnerTeamID == 0 {
+		w := effectiveTeamMatchWinner(m)
+		if w == 0 {
 			continue
 		}
 		if !tiedSet[m.TeamAID] || !tiedSet[m.TeamBID] {
@@ -479,7 +497,7 @@ func miniStats(teamID int, tiedIDs []int, matches []teamMatchResult, games []gam
 		if m.TeamAID != teamID && m.TeamBID != teamID {
 			continue
 		}
-		if m.WinnerTeamID == teamID {
+		if w == teamID {
 			ms.points += 2
 		} else {
 			ms.points += 1

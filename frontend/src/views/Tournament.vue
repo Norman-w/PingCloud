@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showDialog } from 'vant'
 import TournamentGroupView from '../components/TournamentGroupView.vue'
 import TournamentKnockout from '../components/TournamentKnockout.vue'
 
@@ -150,6 +150,30 @@ async function advanceKnockout() {
   } catch (e: any) { showToast('晋级失败: ' + e.message) }
 }
 
+async function completeTournament() {
+  try {
+    await showDialog({ title: '结束赛事', message: '确认结束本届混合团体赛并公布排名？', showCancelButton: true })
+  } catch { return }
+  try {
+    const r = await fetch(`/api/tournaments/${currentId.value}/complete`, { method: 'POST' })
+    if (!r.ok) { const t = await r.text(); showToast(t); return }
+    showToast('赛事已结束')
+    await loadDetail(currentId.value)
+    step.value = 'result'
+  } catch (e: any) { showToast('结束失败: ' + e.message) }
+}
+
+function groupMatchesAllPlayed(): boolean {
+  if (!detail.value) return false
+  const group = detail.value.team_matches.filter(m => m.phase === 'group')
+  return group.length > 0 && group.every(m => m.played)
+}
+
+function hasKnockoutMatches(): boolean {
+  if (!detail.value) return false
+  return detail.value.team_matches.some(m => m.phase === 'semifinal' || m.phase === 'final' || m.phase === 'third_place')
+}
+
 async function viewTournament(id: number) {
   currentId.value = id
   await loadDetail(id)
@@ -165,8 +189,9 @@ async function viewTournament(id: number) {
 
 function requiredPlayers(): number {
   if (!detail.value) return 0
-  // 每组至少 2 队才能循环；总人数须整除每队人数
-  return detail.value.group_count * 2 * detail.value.players_per_team
+  // 每组至少 2 队才能循环；单组也只需 ≥2 队
+  const minTeams = detail.value.group_count <= 1 ? 2 : detail.value.group_count * 2
+  return minTeams * detail.value.players_per_team
 }
 
 function confirmedCount(): number {
@@ -263,6 +288,15 @@ function finalStandings() {
     pushRow(3, third.winner_team_id, '三四名胜')
     pushRow(4, loserId, '三四名负')
   }
+  // 单组循环赛：无半决赛时按小组积分榜出最终名次
+  if (!rows.length) {
+    const ranked = [...detail.value.teams]
+      .filter(t => t.group_rank != null)
+      .sort((a, b) => (a.group_rank || 99) - (b.group_rank || 99))
+    for (const t of ranked) {
+      pushRow(t.group_rank!, t.id, `积分 ${t.group_points} · ${t.group_wins}胜${t.group_losses}负`)
+    }
+  }
   return rows
 }
 function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' : t === 'net_deduction' ? '擦网扣分卡' : t }
@@ -347,6 +381,9 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
         <input v-model.number="cfg.max_participants" type="number" min="1"
           style="width: 100%; padding: 12px; border: 1.5px solid #ebedf0; border-radius: 10px; font-size: 15px; outline: none; box-sizing: border-box;" />
         <div style="font-size: 11px; color: #969799; margin-top: 2px;">参考总人数 = {{ cfg.group_count }}组 × {{ cfg.teams_per_group }}队 × {{ cfg.players_per_team }}人 = {{ cfg.group_count * cfg.teams_per_group * cfg.players_per_team }}人；抽签时按实际报名人数组队，组间队数可不均（如 3队+4队）</div>
+        <div v-if="cfg.group_count === 1" style="font-size: 12px; color: #1989fa; margin-top: 6px; padding: 8px 10px; background: #ecf9ff; border-radius: 8px;">
+          单组循环赛：小组赛打完即出最终名次，不再进入半决赛 / 决赛
+        </div>
       </div>
 
       <div style="margin-bottom: 14px;">
@@ -499,12 +536,17 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
     <!-- Knockout / finals -->
     <TournamentKnockout v-if="detail.phase === 'semifinal' || detail.phase === 'final' || detail.phase === 'third_place'" :detail="detail" :tournament-id="currentId" :readonly="isReadonly" @refresh="loadDetail(currentId)" @back="backToList" />
 
-    <!-- Admin advance button -->
-    <div style="padding: 16px;">
-      <button v-if="!isReadonly && detail.phase === 'group' && detail.team_matches.filter(m => m.phase === 'group').every(m => m.played)"
+    <!-- Admin advance / complete -->
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+      <button v-if="!isReadonly && detail.phase === 'group' && detail.group_count >= 2 && groupMatchesAllPlayed()"
         @click="advanceKnockout"
         style="width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #f5a623, #e8961a); color: #fff;">
         🏆 晋级半决赛
+      </button>
+      <button v-if="!isReadonly && detail.phase === 'group' && detail.group_count === 1 && groupMatchesAllPlayed()"
+        @click="completeTournament"
+        style="width: 100%; padding: 16px; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, #07c160, #06ad56); color: #fff;">
+        🏁 结束赛事并公布排名
       </button>
     </div>
   </div>
@@ -524,7 +566,7 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
           :style="{ flex: 1, padding: '8px', borderRadius: '10px', border: 'none', fontWeight: 700, fontSize: '13px', cursor: 'pointer', background: reviewSection === 'group' ? '#fff' : 'rgba(255,255,255,0.2)', color: reviewSection === 'group' ? '#1a56db' : '#fff' }">
           小组赛
         </button>
-        <button @click="reviewSection = 'knockout'"
+        <button v-if="hasKnockoutMatches()" @click="reviewSection = 'knockout'"
           :style="{ flex: 1, padding: '8px', borderRadius: '10px', border: 'none', fontWeight: 700, fontSize: '13px', cursor: 'pointer', background: reviewSection === 'knockout' ? '#fff' : 'rgba(255,255,255,0.2)', color: reviewSection === 'knockout' ? '#1a56db' : '#fff' }">
           半决赛 / 决赛
         </button>
@@ -565,28 +607,13 @@ function cardLabel(t: string) { return t === 'edge_double' ? '擦边翻倍卡' :
         </div>
       </div>
     </div>
-    <div v-else v-for="team of detail.teams.filter(t => t.group_rank).sort((a, b) => (a.group_rank || 99) - (b.group_rank || 99))" :key="team.id" class="card" style="margin-bottom: 6px;">
-      <div style="display: flex; align-items: flex-start; gap: 10px;">
-        <span style="font-size: 24px; font-weight: 800; color: #f5a623;">#{{ team.group_rank }}</span>
-        <div style="flex: 1;">
-          <div style="font-weight: 700;">{{ team.team_name }}</div>
-          <div style="font-size: 12px; color: #969799;">{{ team.group_wins }}胜 {{ team.group_losses }}负</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
-            <span v-for="p in team.players" :key="p.id"
-              style="padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 600; background: #f0f2f5; color: #333;">
-              {{ p.role }}·{{ p.name }}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
       <button @click="openReview('group')"
         style="width: 100%; padding: 14px; border: 1.5px solid #1989fa; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; background: #fff; color: #1989fa;">
         📺 复盘 · 小组赛
       </button>
-      <button @click="openReview('knockout')"
+      <button v-if="hasKnockoutMatches()" @click="openReview('knockout')"
         style="width: 100%; padding: 14px; border: 1.5px solid #f5a623; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; background: #fff; color: #e8961a;">
         📺 复盘 · 半决赛 / 决赛
       </button>

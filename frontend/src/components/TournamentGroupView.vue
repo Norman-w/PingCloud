@@ -53,6 +53,15 @@ const drawResult = ref<{ card_type: string; card_detail: string } | null>(null)
 const drawFailTick = ref(0)
 const expandedTeams = ref<Set<number>>(new Set())
 const manualRankGroup = ref<string | null>(null)
+
+const drawingTeamName = computed(() => {
+	const tm = drawingTM.value
+	if (!tm) return ''
+	const drawn = tm.cards.map(c => c.team_id)
+	if (!drawn.includes(tm.team_a_id)) return tm.team_a_name
+	if (!drawn.includes(tm.team_b_id)) return tm.team_b_name
+	return ''
+})
 const manualRanks = ref<Record<number, number>>({})
 const lineupTM = ref<TeamMatch | null>(null)
 const lineupA = ref<{ A: number; B: number; C: number }>({ A: 0, B: 0, C: 0 })
@@ -100,20 +109,34 @@ function groupNeedsManualRank(groupName: string): boolean {
 	return teams.some(t => !t.group_rank)
 }
 
-/** 并列队互战小分（不含场外队伍，如不含 A1） */
+/** 并列队互战小分（按积分分组；≥2 队同分即显示，不只未定名次时） */
 function miniTableForGroup(groupName: string) {
-	const teams = (groupedTeams.value[groupName] || []).filter(t => !t.group_rank)
-	if (teams.length < 2) return null
-	const pts = teams[0].group_points
-	if (!teams.every(t => t.group_points === pts)) return null
-	const tiedIds = new Set(teams.map(t => t.id))
+	const all = groupedTeams.value[groupName] || []
+	const byPts = new Map<number, Team[]>()
+	for (const t of all) {
+		const p = t.group_points || 0
+		if (!byPts.has(p)) byPts.set(p, [])
+		byPts.get(p)!.push(t)
+	}
+	// 优先展示人数最多的并列组（如三人 7 分循环）
+	let tied: Team[] = []
+	for (const teams of byPts.values()) {
+		if (teams.length >= 2 && teams.length > tied.length) tied = teams
+	}
+	if (tied.length < 2) return null
+
+	const tiedIds = new Set(tied.map(t => t.id))
 	const stats: Record<number, { pts: number; fw: number; fl: number; gw: number; gl: number; ps: number }> = {}
-	for (const t of teams) stats[t.id] = { pts: 0, fw: 0, fl: 0, gw: 0, gl: 0, ps: 0 }
+	for (const t of tied) stats[t.id] = { pts: 0, fw: 0, fl: 0, gw: 0, gl: 0, ps: 0 }
 
 	for (const tm of props.detail.team_matches) {
-		if (tm.phase !== 'group' || tm.group_name !== groupName || !tm.played) continue
+		if (tm.phase !== 'group' || tm.group_name !== groupName) continue
 		if (!tiedIds.has(tm.team_a_id) || !tiedIds.has(tm.team_b_id)) continue
+		const ready = tm.played || tm.team_a_wins >= 3 || tm.team_b_wins >= 3
+		if (!ready) continue
 		const w = tm.winner_team_id
+			|| (tm.team_a_wins >= 3 ? tm.team_a_id : null)
+			|| (tm.team_b_wins >= 3 ? tm.team_b_id : null)
 		if (!w) continue
 		stats[w].pts += 2
 		const loser = w === tm.team_a_id ? tm.team_b_id : tm.team_a_id
@@ -137,11 +160,24 @@ function miniTableForGroup(groupName: string) {
 			}
 		}
 	}
-	return teams.map(t => ({
-		team: t,
-		...stats[t.id],
-	}))
+	return [...tied]
+		.sort((a, b) => {
+			const sa = stats[a.id], sb = stats[b.id]
+			return sb.pts - sa.pts
+				|| (sb.fw - sb.fl) - (sa.fw - sa.fl)
+				|| (sb.gw - sb.gl) - (sa.gw - sa.gl)
+				|| sb.ps - sa.ps
+		})
+		.map(t => ({ team: t, ...stats[t.id] }))
 }
+
+const miniTablesByGroup = computed(() => {
+	const out: Record<string, ReturnType<typeof miniTableForGroup>> = {}
+	for (const name of Object.keys(groupedTeams.value)) {
+		out[name] = miniTableForGroup(name)
+	}
+	return out
+})
 
 function teamById(id: number) {
 	return props.detail.teams.find(t => t.id === id)
@@ -186,7 +222,7 @@ async function saveLineup() {
 
 async function completeTeamMatch(tm: TeamMatch) {
 	try {
-		await showDialog({ title: '提交结束', message: `确认结束 ${tm.team_a_name} vs ${tm.team_b_name}？结束后将计入积分榜，改分需先重新打开。` })
+		await showDialog({ title: '提交结束', message: `确认结束 ${tm.team_a_name} vs ${tm.team_b_name}？结束后将计入积分榜，改分需先重新打开。`, showCancelButton: true })
 	} catch { return }
 	try {
 		const r = await fetch(`/api/tournaments/${props.tournamentId}/team-matches/${tm.id}/complete`, { method: 'POST' })
@@ -198,7 +234,7 @@ async function completeTeamMatch(tm: TeamMatch) {
 
 async function reopenTeamMatch(tm: TeamMatch) {
 	try {
-		await showDialog({ title: '重新打开', message: '打开后可改比分/出场，积分榜将暂时撤回本场结果。' })
+		await showDialog({ title: '重新打开', message: '打开后可改比分/出场，积分榜将暂时撤回本场结果。', showCancelButton: true })
 	} catch { return }
 	try {
 		const r = await fetch(`/api/tournaments/${props.tournamentId}/team-matches/${tm.id}/reopen`, { method: 'POST' })
@@ -267,18 +303,20 @@ async function handleScore(g1m: number, g1f: number, g2m: number, g2f: number, g
 	} catch (e: any) { showToast('保存失败: ' + e.message) }
 }
 
-async function handleForfeit(winnerIsA: boolean) {
-	if (!scoringMatch.value) return
-	const winnerTeamId = winnerIsA ? scoringMatch.value.team_a_id : scoringMatch.value.team_b_id
+async function clearMatchScore(tm: TeamMatch, m: Match) {
 	try {
-		const r = await fetch(`/api/tournaments/${props.tournamentId}/matches/${scoringMatch.value.id}/forfeit`, {
-			method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winner_team_id: winnerTeamId }),
+		await showDialog({
+			title: '清除本场比分',
+			message: `确认清除「${matchTypeLabels[m.match_order]}」比分？清除后变为未录入。`,
+			showCancelButton: true,
 		})
-		if (!r.ok) { const t = await r.text(); showToast(t); return }
-		showScore.value = false
-		showSuccessToast('弃权已记录')
+	} catch { return }
+	try {
+		const r = await fetch(`/api/tournaments/${props.tournamentId}/matches/${m.id}/clear`, { method: 'POST' })
+		if (!r.ok) { showToast(await r.text()); return }
+		showSuccessToast('已清除，本场视为未打')
 		emit('refresh')
-	} catch (e: any) { showToast('失败: ' + e.message) }
+	} catch (e: any) { showToast('清除失败: ' + e.message) }
 }
 
 function openCardDraw(tm: TeamMatch) {
@@ -412,11 +450,13 @@ async function confirmManualHint(groupName: string) {
 			</div>
 		</div>
 		<div style="font-size: 11px; color: #969799; margin-top: 6px; padding: 0 2px;">
-			积分：胜场 2 分 / 负场 1 分 · 并列先看互战（不含场外队），互战再同分则看局比/总分
+			积分：胜场 2 分 / 负场 1 分 · 已满 3 胜（含待提交）会计入 · 并列先看互战，再看局比/总分
 		</div>
-		<div v-if="miniTableForGroup(String(groupName))" style="margin-top: 8px; background: #fff7e8; border-radius: 10px; padding: 10px 12px;">
-			<div style="font-size: 12px; font-weight: 700; color: #ed6a0c; margin-bottom: 6px;">互战小分（仅并列队之间）</div>
-			<div v-for="row in miniTableForGroup(String(groupName))" :key="row.team.id"
+		<div v-if="miniTablesByGroup[String(groupName)]?.length" style="margin-top: 8px; background: #fff7e8; border-radius: 10px; padding: 10px 12px;">
+			<div style="font-size: 12px; font-weight: 700; color: #ed6a0c; margin-bottom: 6px;">
+				互战小分（{{ miniTablesByGroup[String(groupName)]![0].team.group_points }} 分并列 · 仅看彼此对战）
+			</div>
+			<div v-for="row in miniTablesByGroup[String(groupName)]" :key="row.team.id"
 				style="display: flex; font-size: 12px; padding: 3px 0; color: #646566;">
 				<span style="flex: 1.5; font-weight: 600;">{{ row.team.team_name }}</span>
 				<span style="flex: 1;">互战积分 {{ row.pts }}</span>
@@ -484,7 +524,7 @@ async function confirmManualHint(groupName: string) {
 						style="padding: 8px 14px; background: #fff; border: 1.5px solid #ed6a0c; color: #ed6a0c; border-radius: 18px; font-size: 13px; font-weight: 700; cursor: pointer;">🔓 重新打开改分</button>
 				</div>
 				<div v-if="!readonly && readyToComplete(tm)" style="text-align: center; font-size: 12px; color: #07c160; padding: 0 14px 8px;">
-					已达 3 胜，请核对比分后点击「提交结束本场」计入积分榜
+					已达 3 胜，积分榜已预览计入；核对比分后点「提交结束本场」正式锁定
 				</div>
 
 				<div v-for="m in tm.matches" :key="m.id"
@@ -499,11 +539,17 @@ async function confirmManualHint(groupName: string) {
 						</div>
 						<div style="font-size: 11px; color: #969799;" v-if="m.played">{{ scoreStr(m) }} <span v-if="m.forfeit" style="color: #ff976a;">(弃权)</span></div>
 					</div>
-					<button v-if="!readonly && !tm.played" @click="openScoreEditor(tm, m)"
-						style="padding: 6px 12px; background: #1989fa; color: #fff; border: none; border-radius: 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
-						{{ m.played ? '改分' : '录入' }}
-					</button>
-					<span v-else-if="m.played" style="font-size: 11px; font-weight: 600; color: #07c160;">{{ matchWinnerLabel(m) }} 胜</span>
+					<div style="display: flex; gap: 6px; flex-shrink: 0;">
+						<button v-if="!readonly && !tm.played && m.played" @click="clearMatchScore(tm, m)"
+							style="padding: 6px 10px; background: #fff; color: #ee0a24; border: 1.5px solid #ee0a24; border-radius: 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+							清除
+						</button>
+						<button v-if="!readonly && !tm.played" @click="openScoreEditor(tm, m)"
+							style="padding: 6px 12px; background: #1989fa; color: #fff; border: none; border-radius: 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+							{{ m.played ? '改分' : '录入' }}
+						</button>
+						<span v-else-if="m.played" style="font-size: 11px; font-weight: 600; color: #07c160;">{{ matchWinnerLabel(m) }} 胜</span>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -550,9 +596,9 @@ async function confirmManualHint(groupName: string) {
 		:male-name="scoringMatch?.player_a_name || ''"
 		:female-name="scoringMatch?.player_b_name || ''"
 		:handicap-points="0"
+		:allow-forfeit="false"
 		@update:show="showScore = $event"
 		@submit="handleScore"
-		@forfeit="handleForfeit"
 	/>
 
 	<TournamentCardDraw
@@ -562,6 +608,7 @@ async function confirmManualHint(groupName: string) {
 		:fail-tick="drawFailTick"
 		:team-a-name="drawingTM?.team_a_name || ''"
 		:team-b-name="drawingTM?.team_b_name || ''"
+		:drawing-team-name="drawingTeamName"
 		@draw="handleDrawCard"
 		@close="showCardDraw = false; emit('refresh')"
 	/>

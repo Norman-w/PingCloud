@@ -422,6 +422,7 @@ func main() {
 			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/complete") { handlers.CompleteTeamMatch(w, r); return }
 			if strings.Contains(path, "/team-matches/") && strings.Contains(path, "/reopen") { handlers.ReopenTeamMatch(w, r); return }
 			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/forfeit") { handlers.ForfeitTournamentMatch(w, r); return }
+			if strings.Contains(path, "/matches/") && strings.HasSuffix(path, "/clear") { handlers.ClearTournamentMatch(w, r); return }
 			if strings.Contains(path, "/matches/") { handlers.ScoreTournamentMatch(w, r); return }
 			if strings.Contains(path, "/set-ranks") { handlers.SetGroupRanks(w, r); return }
 			if path == "complete" || strings.HasSuffix(path, "/complete") { handlers.CompleteTournament(w, r); return }

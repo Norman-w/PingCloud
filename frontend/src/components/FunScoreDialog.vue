@@ -6,6 +6,8 @@ const props = defineProps<{
   maleName: string
   femaleName: string
   handicapPoints: number
+  /** 团体赛单局不提供弃权；默认 true 保留趣味赛弃权 */
+  allowForfeit?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -122,7 +124,7 @@ watch(() => props.show, (v) => {
         <button @click="onCancel" style="flex: 1; padding: 14px; background: #f5f5f5; border: none; border-radius: 24px; font-size: 15px; cursor: pointer;">取消</button>
         <button @click="onSubmit" style="flex: 2; padding: 14px; background: #1989fa; color: #fff; border: none; border-radius: 24px; font-size: 15px; font-weight: 600; cursor: pointer;">确认提交</button>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
+      <div v-if="allowForfeit !== false" style="display:flex;gap:8px;margin-top:8px;">
         <button @click="emit('forfeit', true)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ femaleName }} 弃权</button>
         <button @click="emit('forfeit', false)" style="flex:1;padding:10px;background:#fff;border:1.5px solid #ff976a;border-radius:12px;color:#ff976a;font-size:13px;font-weight:600;cursor:pointer;">{{ maleName }} 弃权</button>
       </div>

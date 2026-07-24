@@ -5,6 +5,8 @@ const props = defineProps<{
   show: boolean
   teamAName: string
   teamBName: string
+  /** 当前轮到抽卡的队伍名，如 A+任鑫 */
+  drawingTeamName: string
   drawing: boolean
   result: { card_type: string; card_detail: string } | null
   failTick?: number
@@ -124,7 +126,12 @@ watch(() => props.show, (v) => {
   <div v-if="show" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500; display: flex; align-items: center; justify-content: center;" @click.self="onClose">
     <div style="background: #fff; border-radius: 16px; padding: 24px 20px; width: 90%; max-width: 340px; text-align: center;">
       <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">🎴 趣味卡抽取</h3>
-      <div style="font-size: 12px; color: #969799; margin-bottom: 16px;">每队赛前各抽一张，全队生效</div>
+      <div style="font-size: 12px; color: #969799; margin-bottom: 6px;">
+        {{ teamAName }} vs {{ teamBName }} · 每队赛前各抽一张
+      </div>
+      <div v-if="drawingTeamName" style="font-size: 16px; font-weight: 800; color: #f5a623; margin-bottom: 16px;">
+        👉 {{ drawingTeamName }} 抽卡{{ spinning ? '中…' : '' }}
+      </div>
 
       <!-- Two cards side by side -->
       <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px;">
@@ -147,11 +154,14 @@ watch(() => props.show, (v) => {
       <!-- Draw button -->
       <button v-if="!spinning && chosenIdx < 0" @click="onDraw"
         style="padding: 14px 40px; background: linear-gradient(135deg, #f5a623, #e8961a); color: #fff; border: none; border-radius: 24px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(245,166,35,0.3);">
-        🎲 抽卡
+        🎲 {{ drawingTeamName ? drawingTeamName + ' 抽卡' : '抽卡' }}
       </button>
 
       <!-- Result -->
       <div v-if="chosenIdx >= 0 && !spinning" style="animation: popIn 0.3s ease-out;">
+        <div v-if="drawingTeamName" style="font-size: 14px; font-weight: 700; color: #646566; margin-bottom: 6px;">
+          {{ drawingTeamName }} 抽到了
+        </div>
         <div style="font-size: 40px; margin-bottom: 4px;">{{ CARD_DEFS[chosenIdx].icon }}</div>
         <div :style="{ fontSize: '18px', fontWeight: 800, color: CARD_DEFS[chosenIdx].color, marginBottom: '4px' }">
           {{ CARD_DEFS[chosenIdx].label }}
